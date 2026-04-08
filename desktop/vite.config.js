@@ -9,7 +9,11 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
-      input: { main: resolve(__dirname, 'index.html') }
+      input: { main: resolve(__dirname, 'index.html') },
+      external: [] // 不外部化 xterm
+    },
+    commonjsOptions: {
+      include: [/xterm/, /node_modules/]
     }
   },
   resolve: {
@@ -17,6 +21,12 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
       '@shared': resolve(__dirname, '../shared')
     }
+  },
+  optimizeDeps: {
+    include: [
+      'xterm',
+      '@xterm/addon-fit'
+    ]
   },
   server: {
     port: 5173,
