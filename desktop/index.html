@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://192.168.0.0/16 http://10.0.0.0/8 http://172.16.0.0/12 ws:;" />
+  <!--
+    不在 HTML 里写 CSP meta — Electron 打包后用 file:// 协议加载，
+    crossorigin + file:// 会导致脚本加载失败（黑屏）。
+    CSP 由 main.js 的 session.webRequest 统一管理。
+  -->
   <title>OpenWrt Manager</title>
-  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 </head>
 <body>
   <div id="root"></div>

@@ -5,29 +5,29 @@ import {
   Settings, Terminal, LogOut, ChevronLeft, Router,
   ChevronDown, Plus
 } from 'lucide-react'
+import { createClient } from '../services/openwrt.js'
 
 const NAV = [
-  { path: 'dashboard', label: '总览',     Icon: LayoutDashboard },
-  { path: 'devices',   label: '设备',     Icon: Wifi },
-  { path: 'traffic',   label: '流量',     Icon: BarChart3 },
-  { path: 'firewall',  label: '防火墙',   Icon: Shield },
-  { path: 'vpn',       label: 'VPN',      Icon: Network },
-  { path: 'system',    label: '系统',     Icon: Settings },
-  { path: 'terminal',  label: '终端',     Icon: Terminal },
+  { path: 'dashboard', label: '总览',   Icon: LayoutDashboard },
+  { path: 'devices',   label: '设备',   Icon: Wifi },
+  { path: 'traffic',   label: '流量',   Icon: BarChart3 },
+  { path: 'firewall',  label: '防火墙', Icon: Shield },
+  { path: 'vpn',       label: 'VPN',    Icon: Network },
+  { path: 'system',    label: '系统',   Icon: Settings },
+  { path: 'terminal',  label: '终端',   Icon: Terminal },
 ]
 
 export default function Layout({ client, config, manager, onDisconnect, onSwitchRouter }) {
-  const [collapsed, setCollapsed]   = useState(false)
-  const [online, setOnline]         = useState(true)
+  const [collapsed,    setCollapsed]    = useState(false)
+  const [online,       setOnline]       = useState(true)
   const [showSwitcher, setShowSwitcher] = useState(false)
-  const [routers, setRouters]       = useState([])
+  const [routers,      setRouters]      = useState([])
   const navigate = useNavigate()
 
   useEffect(() => {
     if (manager) setRouters(manager.listRouters())
-    // 心跳检测
     const t = setInterval(async () => {
-      try { await client.call('system', 'info'); setOnline(true) }
+      try   { await client.call('system', 'info'); setOnline(true)  }
       catch { setOnline(false) }
     }, 30000)
     return () => clearInterval(t)
@@ -37,9 +37,8 @@ export default function Layout({ client, config, manager, onDisconnect, onSwitch
     if (!manager) return
     const cfg = manager.getConfig(id)
     if (!cfg) return
-    const { createClient } = await import('../services/openwrt.js')
-    const newClient = createClient(cfg)
     try {
+      const newClient = createClient(cfg)
       await newClient.login()
       onSwitchRouter({ client: newClient, config: cfg, manager })
       setShowSwitcher(false)
@@ -58,7 +57,6 @@ export default function Layout({ client, config, manager, onDisconnect, onSwitch
           <span>OpenWrt Manager</span>
         </div>
 
-        {/* 路由器切换器 */}
         <div className="titlebar-center" style={{ WebkitAppRegion: 'no-drag', position: 'relative' }}>
           <button className="router-switcher-btn" onClick={() => setShowSwitcher(v => !v)}>
             <span className={`status-dot ${online ? 'online' : 'offline'}`} />
@@ -79,7 +77,8 @@ export default function Layout({ client, config, manager, onDisconnect, onSwitch
                   <span className="dropdown-host">{r.host}</span>
                 </button>
               ))}
-              <button className="dropdown-add" onClick={() => { onDisconnect(); setShowSwitcher(false) }}>
+              <button className="dropdown-add"
+                onClick={() => { onDisconnect(); setShowSwitcher(false) }}>
                 <Plus size={12} /> 添加/管理路由器
               </button>
             </div>
@@ -108,14 +107,12 @@ export default function Layout({ client, config, manager, onDisconnect, onSwitch
               </NavLink>
             ))}
           </nav>
-
           <div className="sidebar-footer">
             <button className="nav-item logout-btn" onClick={onDisconnect} title="断开连接">
               <LogOut size={17} />
               {!collapsed && <span>断开</span>}
             </button>
           </div>
-
           <button className="collapse-btn" onClick={() => setCollapsed(v => !v)}>
             <ChevronLeft size={14} style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: '.2s' }} />
           </button>

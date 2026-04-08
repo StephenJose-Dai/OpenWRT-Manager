@@ -2,20 +2,34 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
+// Vite 插件：移除 HTML 中的 crossorigin 属性
+// crossorigin + file:// 协议会导致 Electron 黑屏
+function removeElectronCrossorigin() {
+  return {
+    name: 'remove-electron-crossorigin',
+    transformIndexHtml(html) {
+      return html
+        .replace(/<script\s+type="module"\s+crossorigin\s+/g,  '<script type="module" ')
+        .replace(/<link\s+rel="stylesheet"\s+crossorigin\s+/g, '<link rel="stylesheet" ')
+        .replace(/<link\s+rel="modulepreload"\s+crossorigin[^>]*>/g, '')
+        .replace(/\s+crossorigin/g, '')
+    }
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), removeElectronCrossorigin()],
   base: './',
 
   build: {
-    outDir:   'dist',
+    outDir: 'dist',
     emptyOutDir: true,
-    chunkSizeWarningLimit: 1024,   // 提高警告阈值，避免大 bundle 警告
+    chunkSizeWarningLimit: 1024,
+    modulePreload: false,
     commonjsOptions: {
-      // 让 Rollup 能处理 shared/ 目录中的 CommonJS 模块
       include: [/shared\//, /node_modules\//]
     },
     rollupOptions: {
-      // xterm 在 Electron 运行时由 node_modules 直接提供，不打入 bundle
       external: [
         '@xterm/xterm',
         '@xterm/addon-fit',
@@ -23,11 +37,10 @@ export default defineConfig({
       ],
       input: { main: resolve(__dirname, 'index.html') },
       output: {
-        // 手动分包：把大型库拆分到独立 chunk，加快首屏加载
         manualChunks: {
-          'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts':  ['recharts'],
-          'vendor-ui':      ['lucide-react', 'zustand'],
+          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+          'vendor-charts': ['recharts'],
+          'vendor-ui':     ['lucide-react', 'zustand'],
         }
       }
     }

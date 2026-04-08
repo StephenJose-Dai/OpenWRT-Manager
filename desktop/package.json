@@ -80,14 +80,70 @@
       "language": "2052",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico"
+      "installerHeaderIcon": "assets/icon.ico",
+      "menuCategory": "OpenWrt Manager",
+      "perMachine": false,
+      "script": "installer.nsh"
     },
     "portable": {
       "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
     },
     "publish": null,
     "linux": {
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "category": "Network",
+      "description": "OpenWrt 路由器管理工具",
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "snap",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "pacman",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "deb": {
+      "depends": [
+        "libnotify4",
+        "libxtst6",
+        "libnss3"
+      ],
+      "packageCategory": "net",
+      "priority": "optional"
+    },
+    "rpm": {
+      "depends": [
+        "libnotify",
+        "libXtst"
+      ]
     }
   },
   "author": "OpenWrt Manager"
