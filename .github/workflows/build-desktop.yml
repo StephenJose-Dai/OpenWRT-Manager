@@ -2,85 +2,21 @@ name: Build Desktop (Windows)
 
 on:
   push:
-    tags:
-      - 'v*'          # 打 tag 时触发，如 v1.0.0
-  workflow_dispatch:  # 也支持手动触发
-    inputs:
-      version:
-        description: '版本号 (如 1.0.0)'
-        required: false
-        default: 'dev'
+    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
-  contents: write   # 允许上传 Release
+  contents: write
 
-# ─── 版本号统一处理 ─────────────────────────────────────────
 env:
   APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.run_number) }}
 
 jobs:
   # ══════════════════════════════════════════════════════════
-  # Job 1: Windows 10/11 现代版（最新 Electron，x64 + x86）
+  # Windows 10/11 — 最新 Electron
   # ══════════════════════════════════════════════════════════
-  build-windows-modern:
-    name: Windows 10/11 (${{ matrix.arch }})
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, ia32]   # ia32 = x86 32位
-
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 设置 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: desktop/package-lock.json
-
-      - name: 安装依赖
-        working-directory: desktop
-        run: npm ci
-
-      - name: 构建 React 前端
-        working-directory: desktop
-        run: npm run build
-        env:
-          VITE_API_MODE: direct   # 直连模式，无需后端
-
-      - name: 打包 Electron（Win10/11，${{ matrix.arch }}）
-        working-directory: desktop
-        run: npx electron-builder --win nsis --${{ matrix.arch }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 不签名（开源项目，如需签名请添加 CSC_LINK / CSC_KEY_PASSWORD）
-
-      - name: 重命名产物
-        working-directory: desktop
-        shell: pwsh
-        run: |
-          $arch = "${{ matrix.arch }}"
-          $ver  = "${{ env.APP_VERSION }}"
-          $src  = Get-ChildItem "dist-electron\*.exe" | Select-Object -First 1
-          $dst  = "dist-electron\OpenWrtManager-${ver}-win10-${arch}-setup.exe"
-          Move-Item $src.FullName $dst
-          echo "ARTIFACT_PATH=$dst" >> $env:GITHUB_ENV
-
-      - name: 上传 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-modern-${{ matrix.arch }}
-          path: desktop/${{ env.ARTIFACT_PATH }}
-          retention-days: 30
-
-  # ══════════════════════════════════════════════════════════
-  # Job 2: Windows 7/8/8.1 兼容版（Electron 22，x64 + x86）
-  # ══════════════════════════════════════════════════════════
-  build-windows-legacy:
-    name: Windows 7/8/8.1 (${{ matrix.arch }})
+  build-modern:
+    name: Windows 10/11 — ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -88,105 +24,167 @@ jobs:
         arch: [x64, ia32]
 
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 设置 Node.js 16（与 Electron 22 匹配）
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '16'
-          cache: 'npm'
-          cache-dependency-path: desktop/package-lock.json
+          node-version: '20'
+          cache: ''          # 不用内置 cache，手动管理
 
-      - name: 安装依赖（锁定 Electron 22 兼容版本）
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: nm-cache
+        with:
+          path: desktop/node_modules
+          key: nm-modern-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: nm-modern-${{ runner.os }}-
+
+      - name: npm ci
+        if: steps.nm-cache.outputs.cache-hit != 'true'
         working-directory: desktop
-        run: |
-          npm ci
-          npm install --save-dev electron@22.3.27 --legacy-peer-deps
+        run: npm ci
 
-      - name: 构建 React 前端
+      - name: Build frontend
         working-directory: desktop
         run: npm run build
         env:
-          VITE_API_MODE: direct
+          VITE_APP_VERSION: ${{ env.APP_VERSION }}
 
-      - name: 打包 Electron（Win7/8 兼容，${{ matrix.arch }}）
+      - name: Package (modern)
         working-directory: desktop
-        shell: pwsh
-        run: |
-          # 临时覆盖 electron-builder 配置，强制使用 Electron 22
-          $config = Get-Content "package.json" | ConvertFrom-Json
-          $config.build.electronVersion = "22.3.27"
-          $config | ConvertTo-Json -Depth 10 | Set-Content "package.json"
-          npx electron-builder --win nsis --${{ matrix.arch }}
+        run: npx electron-builder --win nsis portable --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 重命名产物（标注 legacy）
+      - name: Rename artifacts
+        shell: pwsh
+        working-directory: desktop/dist-electron
+        run: |
+          $v = "${{ env.APP_VERSION }}"; $a = "${{ matrix.arch }}"
+          Get-ChildItem "*.exe" | ForEach-Object {
+            $t = if ($_.Name -match "(?i)portable") { "portable" } else { "setup" }
+            Rename-Item $_.FullName "OpenWrtManager-${v}-win10-${a}-${t}.exe"
+          }
+          Get-ChildItem "*.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win-modern-${{ matrix.arch }}
+          path: desktop/dist-electron/*.exe
+          retention-days: 7
+          if-no-files-found: error
+
+  # ══════════════════════════════════════════════════════════
+  # Windows 7/8/8.1 — Electron 22
+  # ══════════════════════════════════════════════════════════
+  build-legacy:
+    name: Windows 7/8 — ${{ matrix.arch }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, ia32]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16'   # Node 16 与 Electron 22 匹配
+          cache: ''
+
+      - name: Cache node_modules (legacy)
+        uses: actions/cache@v4
+        id: nm-cache
+        with:
+          path: desktop/node_modules
+          key: nm-legacy-${{ runner.os }}-e22-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: nm-legacy-${{ runner.os }}-e22-
+
+      - name: Install + downgrade to Electron 22
         working-directory: desktop
         shell: pwsh
         run: |
-          $arch = "${{ matrix.arch }}"
-          $ver  = "${{ env.APP_VERSION }}"
-          $src  = Get-ChildItem "dist-electron\*.exe" | Select-Object -First 1
-          $dst  = "dist-electron\OpenWrtManager-${ver}-win7-${arch}-setup.exe"
-          Move-Item $src.FullName $dst
-          echo "ARTIFACT_PATH=$dst" >> $env:GITHUB_ENV
+          if ("${{ steps.nm-cache.outputs.cache-hit }}" -ne "true") {
+            npm ci
+          }
+          # 强制安装 Electron 22，无论缓存命中与否
+          npm install electron@22.3.27 --save-dev --legacy-peer-deps --no-save
 
-      - name: 上传 Artifact
-        uses: actions/upload-artifact@v4
+      - name: Build frontend
+        working-directory: desktop
+        run: npm run build
+        env:
+          VITE_APP_VERSION: ${{ env.APP_VERSION }}
+
+      - name: Patch electron version in package.json
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json | ConvertFrom-Json
+          # 注入 electronVersion，只保留 nsis target
+          if (-not ($pkg.build | Get-Member electronVersion -EA 0)) {
+            $pkg.build | Add-Member -NotePropertyName electronVersion -NotePropertyValue "22.3.27"
+          } else { $pkg.build.electronVersion = "22.3.27" }
+          $pkg.build.win.target = @(@{ target="nsis"; arch=@("${{ matrix.arch }}") })
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content package.json
+          Write-Host "Patched: electronVersion=$(($pkg.build).electronVersion)"
+
+      - name: Package (legacy)
+        working-directory: desktop
+        run: npx electron-builder --win nsis --${{ matrix.arch }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename artifacts
+        shell: pwsh
+        working-directory: desktop/dist-electron
+        run: |
+          $v = "${{ env.APP_VERSION }}"; $a = "${{ matrix.arch }}"
+          Get-ChildItem "*.exe" | ForEach-Object {
+            Rename-Item $_.FullName "OpenWrtManager-${v}-win7-${a}-setup.exe"
+          }
+          Get-ChildItem "*.exe"
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: windows-legacy-${{ matrix.arch }}
-          path: desktop/${{ env.ARTIFACT_PATH }}
-          retention-days: 30
+          name: win-legacy-${{ matrix.arch }}
+          path: desktop/dist-electron/*.exe
+          retention-days: 7
+          if-no-files-found: error
 
   # ══════════════════════════════════════════════════════════
-  # Job 3: 发布 Release（仅在 tag 推送时执行）
+  # Release（仅 tag）
   # ══════════════════════════════════════════════════════════
-  release-windows:
-    name: 发布 Windows Release
-    needs: [build-windows-modern, build-windows-legacy]
+  release:
+    needs: [build-modern, build-legacy]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-      - name: 下载所有 Windows 产物
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          pattern: windows-*
+          pattern: win-*
           merge-multiple: true
-          path: release-files
+          path: files
 
-      - name: 列出产物
-        run: ls -la release-files/
+      - run: ls -lh files/
 
-      - name: 创建 / 更新 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: "OpenWrt Manager ${{ github.ref_name }}"
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
           body: |
-            ## 下载说明
+            ## Windows 下载
 
-            ### Windows 版本
-            | 文件 | 适用系统 | 架构 |
-            |------|----------|------|
-            | `*-win10-x64-setup.exe` | Windows 10/11 | 64位（推荐） |
+            | 文件 | 系统 | 架构 |
+            |------|------|------|
+            | `*-win10-x64-setup.exe` | Windows 10/11 | 64位 ✅ 推荐 |
+            | `*-win10-x64-portable.exe` | Windows 10/11 | 64位免安装 |
             | `*-win10-ia32-setup.exe` | Windows 10/11 | 32位 |
-            | `*-win7-x64-setup.exe` | Windows 7/8/8.1/10 | 64位（兼容旧系统） |
-            | `*-win7-ia32-setup.exe` | Windows 7/8/8.1/10 | 32位（兼容旧系统） |
-
-            > **不确定选哪个？** Win10/11 用户选 `win10-x64`，旧系统用 `win7-*`
-
-            ### 路由器端配置
-            首次使用请在路由器执行：
-            ```bash
-            opkg update && opkg install rpcd uhttpd-mod-ubus
-            uci set uhttpd.main.ubus_cors=1 && uci commit uhttpd
-            /etc/init.d/uhttpd restart
-            ```
-          files: release-files/*
+            | `*-win7-x64-setup.exe` | Win 7/8/8.1/10 | 64位（兼容旧系统）|
+            | `*-win7-ia32-setup.exe` | Win 7/8/8.1/10 | 32位（兼容旧系统）|
+          files: files/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

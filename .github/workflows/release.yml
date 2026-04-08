@@ -1,72 +1,63 @@
 name: Release (All Platforms)
 
-# 此 workflow 协调所有平台的构建，在所有平台编译完成后统一发 Release
-# 由 tag push 触发，会并行启动桌面和安卓的构建
-
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号'
-        required: true
+        description: '版本号（手动触发时使用）'
+        required: false
         default: '1.0.0'
 
 permissions:
   contents: write
-  actions: read
 
 env:
-  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', inputs.version) }}
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', inputs.version || '1.0.0') }}
 
 jobs:
-  # ── 读取版本和 changelog ──────────────────────────────────
+  # ── 准备阶段：读取版本和 changelog ───────────────────────
   prepare:
-    name: 准备发布信息
     runs-on: ubuntu-latest
     outputs:
-      version:    ${{ steps.ver.outputs.version }}
-      is_prerelease: ${{ steps.ver.outputs.is_prerelease }}
-      changelog:  ${{ steps.cl.outputs.changelog }}
+      version:       ${{ steps.info.outputs.version }}
+      is_prerelease: ${{ steps.info.outputs.is_prerelease }}
+      changelog:     ${{ steps.info.outputs.changelog }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # 获取完整历史，用于生成 changelog
+          fetch-depth: 0
 
-      - name: 解析版本号
-        id: ver
+      - name: Extract version info
+        id: info
         run: |
           VER="${{ env.APP_VERSION }}"
           echo "version=$VER" >> $GITHUB_OUTPUT
-          if [[ "$VER" == *"alpha"* ]] || [[ "$VER" == *"beta"* ]] || [[ "$VER" == *"rc"* ]]; then
-            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+
+          if echo "$VER" | grep -qE '(alpha|beta|rc)'; then
+            echo "is_prerelease=true"  >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: 生成 Changelog（上个 tag 到现在的提交）
-        id: cl
-        run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREV_TAG" ]; then
-            LOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -30)
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV" ]; then
+            LOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -20)
           else
-            LOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+            LOG=$(git log "${PREV}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
           fi
-          # 多行输出处理
           {
-            echo "changelog<<CHANGELOG_EOF"
-            echo "$LOG"
-            echo "CHANGELOG_EOF"
+            echo "changelog<<__EOF__"
+            echo "${LOG:-（无更新记录）}"
+            echo "__EOF__"
           } >> $GITHUB_OUTPUT
 
   # ── Windows 10/11 ─────────────────────────────────────────
-  build-win-modern:
-    name: Windows 10/11 (${{ matrix.arch }})
+  win-modern:
     needs: prepare
+    name: Windows 10/11 — ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -79,52 +70,51 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: desktop/package-lock.json
+          cache: ''
 
-      - name: 安装依赖
+      - uses: actions/cache@v4
+        id: c
+        with:
+          path: desktop/node_modules
+          key: nm-modern-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
+
+      - name: npm ci
+        if: steps.c.outputs.cache-hit != 'true'
         working-directory: desktop
         run: npm ci
 
-      - name: 构建
+      - name: Build
         working-directory: desktop
         run: npm run build
         env:
           VITE_APP_VERSION: ${{ needs.prepare.outputs.version }}
-          VITE_API_MODE: direct
 
-      - name: Electron 打包
+      - name: Package
         working-directory: desktop
-        run: npx electron-builder --win nsis portable --${{ matrix.arch }}
+        run: npx electron-builder --win nsis portable --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 重命名产物
-        working-directory: desktop/dist-electron
+      - name: Rename
         shell: pwsh
+        working-directory: desktop/dist-electron
         run: |
-          $ver  = "${{ needs.prepare.outputs.version }}"
-          $arch = "${{ matrix.arch }}"
-          # 安装包
-          Get-ChildItem "*.exe" | Where-Object { $_.Name -notlike "*portable*" } | ForEach-Object {
-            Rename-Item $_.FullName "OpenWrtManager-${ver}-win10-${arch}-setup.exe"
-          }
-          # 便携版
-          Get-ChildItem "*portable*.exe" | ForEach-Object {
-            Rename-Item $_.FullName "OpenWrtManager-${ver}-win10-${arch}-portable.exe"
+          $v="${{ needs.prepare.outputs.version }}"; $a="${{ matrix.arch }}"
+          Get-ChildItem "*.exe" | ForEach-Object {
+            $t = if ($_.Name -match "(?i)portable") {"portable"} else {"setup"}
+            Rename-Item $_.FullName "OpenWrtManager-${v}-win10-${a}-${t}.exe"
           }
 
       - uses: actions/upload-artifact@v4
         with:
           name: win-modern-${{ matrix.arch }}
-          path: |
-            desktop/dist-electron/*-win10-*.exe
-          retention-days: 7
+          path: desktop/dist-electron/*.exe
+          retention-days: 3
 
   # ── Windows 7/8/8.1 ──────────────────────────────────────
-  build-win-legacy:
-    name: Windows 7/8 (${{ matrix.arch }})
+  win-legacy:
     needs: prepare
+    name: Windows 7/8 — ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -134,59 +124,66 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Node 16 是支持 Electron 22 的最高稳定版本
       - uses: actions/setup-node@v4
         with:
           node-version: '16'
-          cache: 'npm'
-          cache-dependency-path: desktop/package-lock.json
+          cache: ''
 
-      - name: 安装依赖（降级至 Electron 22）
+      - uses: actions/cache@v4
+        id: c
+        with:
+          path: desktop/node_modules
+          key: nm-legacy-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
+
+      - name: Install + Electron 22
         working-directory: desktop
+        shell: pwsh
         run: |
-          npm ci
-          npm install electron@22.3.27 --save-dev --legacy-peer-deps
+          if ("${{ steps.c.outputs.cache-hit }}" -ne "true") { npm ci }
+          npm install electron@22.3.27 --save-dev --legacy-peer-deps --no-save
 
-      - name: 构建
+      - name: Build
         working-directory: desktop
         run: npm run build
         env:
           VITE_APP_VERSION: ${{ needs.prepare.outputs.version }}
-          VITE_API_MODE: direct
 
-      - name: Electron 22 打包
+      - name: Patch package.json
         working-directory: desktop
         shell: pwsh
         run: |
-          # 动态覆盖 electronVersion
-          $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
-          $pkg.build | Add-Member -NotePropertyName "electronVersion" -NotePropertyValue "22.3.27" -Force
-          $pkg | ConvertTo-Json -Depth 20 | Set-Content "package.json"
-          # 只打 nsis（Win7 不支持 portable 格式的某些特性）
-          npx electron-builder --win nsis --${{ matrix.arch }}
+          $p = Get-Content package.json | ConvertFrom-Json
+          if (-not ($p.build | Get-Member electronVersion -EA 0)) {
+            $p.build | Add-Member -NotePropertyName electronVersion -NotePropertyValue "22.3.27"
+          } else { $p.build.electronVersion = "22.3.27" }
+          $p.build.win.target = @(@{target="nsis";arch=@("${{ matrix.arch }}")})
+          $p | ConvertTo-Json -Depth 20 | Set-Content package.json
+
+      - name: Package
+        working-directory: desktop
+        run: npx electron-builder --win nsis --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 重命名产物
-        working-directory: desktop/dist-electron
+      - name: Rename
         shell: pwsh
+        working-directory: desktop/dist-electron
         run: |
-          $ver  = "${{ needs.prepare.outputs.version }}"
-          $arch = "${{ matrix.arch }}"
+          $v="${{ needs.prepare.outputs.version }}"; $a="${{ matrix.arch }}"
           Get-ChildItem "*.exe" | ForEach-Object {
-            Rename-Item $_.FullName "OpenWrtManager-${ver}-win7-${arch}-setup.exe"
+            Rename-Item $_.FullName "OpenWrtManager-${v}-win7-${a}-setup.exe"
           }
 
       - uses: actions/upload-artifact@v4
         with:
           name: win-legacy-${{ matrix.arch }}
-          path: desktop/dist-electron/*-win7-*.exe
-          retention-days: 7
+          path: desktop/dist-electron/*.exe
+          retention-days: 3
 
   # ── Android ───────────────────────────────────────────────
-  build-android:
-    name: Android APK (全架构)
+  android:
     needs: prepare
+    name: Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -195,52 +192,44 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
+          distribution: temurin
+          cache: gradle
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: mobile/package-lock.json
+          cache: ''
+
+      - uses: actions/cache@v4
+        id: c
+        with:
+          path: mobile/node_modules
+          key: nm-android-${{ hashFiles('mobile/package-lock.json') }}
+
+      - name: npm install
+        if: steps.c.outputs.cache-hit != 'true'
+        working-directory: mobile
+        run: npm install --legacy-peer-deps
 
       - uses: android-actions/setup-android@v3
 
-      - name: 安装 NDK 26
-        run: sdkmanager "ndk;26.1.10909125"
+      - run: sdkmanager "ndk;26.1.10909125"
 
-      - name: 安装 Node 依赖
-        working-directory: mobile
-        run: npm ci
-
-      - name: Gradle 缓存
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('mobile/android/**/*.gradle*') }}
-          restore-keys: gradle-
-
-      - name: 还原签名证书
-        if: secrets.ANDROID_KEYSTORE_BASE64 != ''
+      - name: Restore keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d \
             > mobile/android/app/release.keystore
+          echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
 
-      - name: 写入 Gradle 配置
+      - name: Patch gradle.properties
         working-directory: mobile/android
         run: |
-          cat >> gradle.properties << 'EOF'
-          reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
-          android.useAndroidX=true
-          android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx4096m
-          org.gradle.parallel=true
-          org.gradle.caching=true
-          EOF
+          echo "reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64" >> gradle.properties
+          echo "org.gradle.jvmargs=-Xmx4096m" >> gradle.properties
+          echo "org.gradle.parallel=true" >> gradle.properties
 
-      - name: JS Bundle
+      - name: JS bundle
         working-directory: mobile
         run: |
           mkdir -p android/app/src/main/assets
@@ -250,33 +239,33 @@ jobs:
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
 
-      - name: 构建分架构 APK
+      - name: Build APKs
         working-directory: mobile/android
         run: |
+          SIGN=""
+          [ "$HAS_KEYSTORE" = "true" ] && SIGN="-PkeystoreFile=$(pwd)/app/release.keystore \
+            -PkeyAlias=${{ secrets.ANDROID_KEY_ALIAS }} \
+            -PkeyPassword=${{ secrets.ANDROID_KEY_PASSWORD }} \
+            -PstorePassword=${{ secrets.ANDROID_STORE_PASSWORD }}"
           ./gradlew assembleRelease \
             -PversionName="${{ needs.prepare.outputs.version }}" \
             -PversionCode="${{ github.run_number }}" \
             -PenableSeparateBuildPerCPUArchitecture=true \
             -PuniversalApk=true \
-            ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && format(
-              '-PkeystoreFile=app/release.keystore -PkeyAlias={0} -PkeyPassword={1} -PstorePassword={2}',
-              secrets.ANDROID_KEY_ALIAS,
-              secrets.ANDROID_KEY_PASSWORD,
-              secrets.ANDROID_STORE_PASSWORD
-            ) || '' }}
+            $SIGN
 
-      - name: 整理 APK
+      - name: Collect APKs
         run: |
-          VER="${{ needs.prepare.outputs.version }}"
+          V="${{ needs.prepare.outputs.version }}"
+          S="mobile/android/app/build/outputs/apk/release"
           mkdir apks
-          declare -A MAP=(["armeabi-v7a"]="armv7" ["arm64-v8a"]="arm64" ["x86"]="x86" ["x86_64"]="x86_64")
+          declare -A M=(["armeabi-v7a"]="armv7" ["arm64-v8a"]="arm64" ["x86"]="x86" ["x86_64"]="x86_64")
           for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-            src="mobile/android/app/build/outputs/apk/release/app-${abi}-release.apk"
-            [ -f "$src" ] && cp "$src" "apks/OpenWrtManager-${VER}-android-${MAP[$abi]}.apk"
+            [ -f "$S/app-${abi}-release.apk" ] && \
+              cp "$S/app-${abi}-release.apk" "apks/OpenWrtManager-${V}-android-${M[$abi]}.apk"
           done
-          for f in mobile/android/app/build/outputs/apk/release/app-universal-release.apk \
-                   mobile/android/app/build/outputs/apk/release/app-release.apk; do
-            [ -f "$f" ] && cp "$f" "apks/OpenWrtManager-${VER}-android-universal.apk" && break
+          for f in "$S/app-universal-release.apk" "$S/app-release.apk"; do
+            [ -f "$f" ] && cp "$f" "apks/OpenWrtManager-${V}-android-universal.apk" && break
           done
           ls -lh apks/
 
@@ -284,39 +273,35 @@ jobs:
         with:
           name: android-apks
           path: apks/*.apk
-          retention-days: 7
+          retention-days: 3
+          if-no-files-found: error
 
   # ── 统一发布 Release ──────────────────────────────────────
-  publish-release:
-    name: 发布 GitHub Release
-    needs: [prepare, build-win-modern, build-win-legacy, build-android]
+  publish:
+    needs: [prepare, win-modern, win-legacy, android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-      - name: 下载所有产物
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
-          path: all-releases
+          path: all
 
-      - name: 列出所有产物
+      - name: Summary
         run: |
-          echo "## 发布产物清单" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          ls -lh all-releases/ | awk '{print "- `"$NF"` ("$5")"}' >> $GITHUB_STEP_SUMMARY
+          echo "## 发布产物 — ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          ls -lh all/ | awk 'NR>1{print "- `"$NF"` ("$5")"}' >> $GITHUB_STEP_SUMMARY
 
-      - name: 发布 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: "OpenWrt Manager ${{ needs.prepare.outputs.version }}"
           prerelease: ${{ needs.prepare.outputs.is_prerelease }}
-          draft: false
           body: |
             # OpenWrt Manager ${{ needs.prepare.outputs.version }}
 
-            无后端直连版——通过 ubus HTTP 直接管理 OpenWrt 路由器，支持局域网自动发现、多路由器管理。
+            OpenWrt 路由器无后端直连管理工具，通过 ubus HTTP 直连路由器。
 
             ## 更新内容
             ${{ needs.prepare.outputs.changelog }}
@@ -326,22 +311,22 @@ jobs:
             ## 下载
 
             ### Windows 桌面客户端
-            | 文件 | 系统要求 | 架构 |
-            |------|----------|------|
+            | 文件 | 系统 | 架构 |
+            |------|------|------|
             | `*-win10-x64-setup.exe` | Windows 10/11 | 64位 ✅ 推荐 |
-            | `*-win10-x64-portable.exe` | Windows 10/11 | 64位（免安装） |
+            | `*-win10-x64-portable.exe` | Windows 10/11 | 64位（免安装）|
             | `*-win10-ia32-setup.exe` | Windows 10/11 | 32位 |
-            | `*-win7-x64-setup.exe` | Win 7/8/8.1/10 | 64位（兼容旧系统） |
-            | `*-win7-ia32-setup.exe` | Win 7/8/8.1/10 | 32位（兼容旧系统） |
+            | `*-win7-x64-setup.exe` | Win 7/8/8.1 | 64位（兼容旧系统）|
+            | `*-win7-ia32-setup.exe` | Win 7/8/8.1 | 32位（兼容旧系统）|
 
             ### Android 手机 APP
             | 文件 | 适用设备 |
-            |------|----------|
-            | `*-android-arm64.apk` | 2016年后的主流 Android 手机 ✅ 推荐 |
-            | `*-android-armv7.apk` | 老款 Android 手机（ARMv7） |
-            | `*-android-x86_64.apk` | x86_64 平板 / 模拟器 |
-            | `*-android-x86.apk` | 老款 x86 平板 / 模拟器 |
-            | `*-android-universal.apk` | 通用包（不确定时选此） |
+            |------|---------|
+            | `*-android-arm64.apk` | 主流 Android 手机 ✅ 推荐 |
+            | `*-android-armv7.apk` | 老款 Android（ARMv7）|
+            | `*-android-x86_64.apk` | x86_64 平板/模拟器 |
+            | `*-android-x86.apk` | x86 模拟器 |
+            | `*-android-universal.apk` | 通用包（不确定架构选此）|
 
             ---
 
@@ -353,7 +338,7 @@ jobs:
             ```
 
             ## 微信小程序
-            见仓库 `miniprogram/` 目录，导入微信开发者工具后自行发布。
-          files: all-releases/*
+            见仓库 `miniprogram/` 目录，用微信开发者工具导入后发布。
+          files: all/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
