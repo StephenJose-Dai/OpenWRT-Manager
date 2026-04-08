@@ -40,7 +40,8 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "shared/**/*"
+      "shared/**/*",
+      "assets/**/*"
     ],
     "extraResources": [
       {
@@ -65,25 +66,29 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
       "requestedExecutionLevel": "asInvoker",
-      "artifactName": "${productName}-${version}-${os}-${arch}-${buildVersion}.${ext}"
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "OpenWrt Manager",
-      "language": "2052"
+      "language": "2052",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
     },
     "portable": {
-      "artifactName": "${productName}-${version}-${os}-${arch}-portable.${ext}"
+      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
     },
-    "publish": null
-  }
+    "publish": null,
+    "linux": {
+      "icon": "assets/icon.png"
+    }
+  },
+  "author": "OpenWrt Manager"
 }

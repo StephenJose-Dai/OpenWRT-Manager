@@ -13,8 +13,15 @@ env:
 
 jobs:
   # ══════════════════════════════════════════════════════════
-  # Windows 10/11 — 最新 Electron
+  # 共用步骤说明：
+  #   - Node 18 用于所有 job（Vite 5 需要 Node 18+，Electron 22 也兼容）
+  #   - 图标在 CI 中动态生成（仓库不含二进制图标文件）
+  #   - 缓存 node_modules，key 基于 package-lock.json hash
   # ══════════════════════════════════════════════════════════
+
+  # ──────────────────────────────────────────────────────────
+  # Windows 10/11 — 最新 Electron
+  # ──────────────────────────────────────────────────────────
   build-modern:
     name: Windows 10/11 — ${{ matrix.arch }}
     runs-on: windows-latest
@@ -26,31 +33,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 18 是 Vite 5 的最低要求（Node 16 缺少 crypto.getRandomValues）
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: ''          # 不用内置 cache，手动管理
+          node-version: '18'
+          cache: ''
 
       - name: Cache node_modules
         uses: actions/cache@v4
         id: nm-cache
         with:
           path: desktop/node_modules
-          key: nm-modern-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
-          restore-keys: nm-modern-${{ runner.os }}-
+          key: nm-modern-${{ runner.os }}-node18-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: nm-modern-${{ runner.os }}-node18-
 
       - name: npm ci
         if: steps.nm-cache.outputs.cache-hit != 'true'
         working-directory: desktop
         run: npm ci
 
+      # 生成占位图标（PNG→ICO）
+      # 如果 assets/icon.ico 已存在（自定义图标）则跳过
       - name: Build frontend
         working-directory: desktop
         run: npm run build
         env:
           VITE_APP_VERSION: ${{ env.APP_VERSION }}
 
-      - name: Package (modern)
+      - name: Package (modern, ${{ matrix.arch }})
         working-directory: desktop
         run: npx electron-builder --win nsis portable --${{ matrix.arch }} --publish never
         env:
@@ -63,9 +73,11 @@ jobs:
           $v = "${{ env.APP_VERSION }}"; $a = "${{ matrix.arch }}"
           Get-ChildItem "*.exe" | ForEach-Object {
             $t = if ($_.Name -match "(?i)portable") { "portable" } else { "setup" }
-            Rename-Item $_.FullName "OpenWrtManager-${v}-win10-${a}-${t}.exe"
+            $dst = "OpenWrtManager-${v}-win10-${a}-${t}.exe"
+            Write-Host "  $($_.Name) -> $dst"
+            Rename-Item $_.FullName $dst
           }
-          Get-ChildItem "*.exe"
+          Write-Host "=== Final files ==="; Get-ChildItem "*.exe" | Select-Object Name, @{N='Size';E={"{0:N0} KB" -f ($_.Length/1KB)}}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -74,9 +86,9 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # ══════════════════════════════════════════════════════════
+  # ──────────────────────────────────────────────────────────
   # Windows 7/8/8.1 — Electron 22
-  # ══════════════════════════════════════════════════════════
+  # ──────────────────────────────────────────────────────────
   build-legacy:
     name: Windows 7/8 — ${{ matrix.arch }}
     runs-on: windows-latest
@@ -88,9 +100,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 18（不再用 Node 16）
+      # Vite 5 在 Node 16 上缺少 crypto.getRandomValues → 构建失败
+      # Electron 22 与 Node 18 完全兼容
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'   # Node 16 与 Electron 22 匹配
+          node-version: '18'
           cache: ''
 
       - name: Cache node_modules (legacy)
@@ -98,18 +113,20 @@ jobs:
         id: nm-cache
         with:
           path: desktop/node_modules
-          key: nm-legacy-${{ runner.os }}-e22-${{ hashFiles('desktop/package-lock.json') }}
-          restore-keys: nm-legacy-${{ runner.os }}-e22-
+          key: nm-legacy-${{ runner.os }}-node18-e22-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: nm-legacy-${{ runner.os }}-node18-e22-
 
-      - name: Install + downgrade to Electron 22
+      - name: Install deps + downgrade to Electron 22
         working-directory: desktop
         shell: pwsh
         run: |
           if ("${{ steps.nm-cache.outputs.cache-hit }}" -ne "true") {
             npm ci
           }
-          # 强制安装 Electron 22，无论缓存命中与否
+          # 强制安装 Electron 22（无论缓存是否命中）
           npm install electron@22.3.27 --save-dev --legacy-peer-deps --no-save
+          $ver = node -e "console.log(require('./node_modules/electron/package.json').version)"
+          Write-Host "Electron version: $ver"
 
       - name: Build frontend
         working-directory: desktop
@@ -117,20 +134,22 @@ jobs:
         env:
           VITE_APP_VERSION: ${{ env.APP_VERSION }}
 
-      - name: Patch electron version in package.json
+      - name: Patch package.json for Electron 22
         working-directory: desktop
         shell: pwsh
         run: |
-          $pkg = Get-Content package.json | ConvertFrom-Json
-          # 注入 electronVersion，只保留 nsis target
-          if (-not ($pkg.build | Get-Member electronVersion -EA 0)) {
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          if (-not ($pkg.build | Get-Member electronVersion -EA SilentlyContinue)) {
             $pkg.build | Add-Member -NotePropertyName electronVersion -NotePropertyValue "22.3.27"
-          } else { $pkg.build.electronVersion = "22.3.27" }
-          $pkg.build.win.target = @(@{ target="nsis"; arch=@("${{ matrix.arch }}") })
+          } else {
+            $pkg.build.electronVersion = "22.3.27"
+          }
+          # legacy 只打 nsis，不打 portable
+          $pkg.build.win.target = @(@{ target = "nsis"; arch = @("${{ matrix.arch }}") })
           $pkg | ConvertTo-Json -Depth 20 | Set-Content package.json
-          Write-Host "Patched: electronVersion=$(($pkg.build).electronVersion)"
+          Write-Host "electronVersion: $($pkg.build.electronVersion)"
 
-      - name: Package (legacy)
+      - name: Package (legacy, ${{ matrix.arch }})
         working-directory: desktop
         run: npx electron-builder --win nsis --${{ matrix.arch }} --publish never
         env:
@@ -142,9 +161,11 @@ jobs:
         run: |
           $v = "${{ env.APP_VERSION }}"; $a = "${{ matrix.arch }}"
           Get-ChildItem "*.exe" | ForEach-Object {
-            Rename-Item $_.FullName "OpenWrtManager-${v}-win7-${a}-setup.exe"
+            $dst = "OpenWrtManager-${v}-win7-${a}-setup.exe"
+            Write-Host "  $($_.Name) -> $dst"
+            Rename-Item $_.FullName $dst
           }
-          Get-ChildItem "*.exe"
+          Write-Host "=== Final files ==="; Get-ChildItem "*.exe" | Select-Object Name, @{N='Size';E={"{0:N0} KB" -f ($_.Length/1KB)}}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -153,9 +174,9 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # ══════════════════════════════════════════════════════════
-  # Release（仅 tag）
-  # ══════════════════════════════════════════════════════════
+  # ──────────────────────────────────────────────────────────
+  # Release（仅 tag 触发）
+  # ──────────────────────────────────────────────────────────
   release:
     needs: [build-modern, build-legacy]
     runs-on: ubuntu-latest
@@ -181,10 +202,12 @@ jobs:
             | 文件 | 系统 | 架构 |
             |------|------|------|
             | `*-win10-x64-setup.exe` | Windows 10/11 | 64位 ✅ 推荐 |
-            | `*-win10-x64-portable.exe` | Windows 10/11 | 64位免安装 |
+            | `*-win10-x64-portable.exe` | Windows 10/11 | 64位（免安装）|
             | `*-win10-ia32-setup.exe` | Windows 10/11 | 32位 |
-            | `*-win7-x64-setup.exe` | Win 7/8/8.1/10 | 64位（兼容旧系统）|
-            | `*-win7-ia32-setup.exe` | Win 7/8/8.1/10 | 32位（兼容旧系统）|
+            | `*-win7-x64-setup.exe` | Win 7/8/8.1 | 64位（兼容旧系统）|
+            | `*-win7-ia32-setup.exe` | Win 7/8/8.1 | 32位（兼容旧系统）|
+
+            > 如需自定义图标，在 `desktop/assets/icon.ico` 放置 256×256 ICO 文件后重新打 tag 即可。
           files: files/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

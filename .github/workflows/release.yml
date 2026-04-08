@@ -83,6 +83,7 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+
       - name: Build
         working-directory: desktop
         run: npm run build
@@ -126,7 +127,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '18'
           cache: ''
 
       - uses: actions/cache@v4
@@ -141,6 +142,7 @@ jobs:
         run: |
           if ("${{ steps.c.outputs.cache-hit }}" -ne "true") { npm ci }
           npm install electron@22.3.27 --save-dev --legacy-peer-deps --no-save
+
 
       - name: Build
         working-directory: desktop

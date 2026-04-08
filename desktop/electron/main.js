@@ -15,9 +15,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      // 允许加载局域网 HTTP（ubus 直连）
-      webSecurity: false
+      webSecurity: false   // 允许加载局域网 HTTP（ubus 直连）
     },
+    // 窗口图标（任务栏显示）
     icon: path.join(__dirname, '../assets/icon.png')
   })
 
@@ -28,10 +28,11 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
 
-  // 窗口控制
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
-  ipcMain.on('window:maximize', () => mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize())
-  ipcMain.on('window:close',    () => mainWindow?.hide())  // 最小化到托盘
+  ipcMain.on('window:maximize', () =>
+    mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
+  )
+  ipcMain.on('window:close', () => mainWindow?.hide())
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
@@ -39,16 +40,18 @@ function createWindow() {
   })
 
   mainWindow.on('close', (e) => {
-    if (!app.isQuitting) {
-      e.preventDefault()
-      mainWindow.hide()
-    }
+    if (!app.isQuitting) { e.preventDefault(); mainWindow.hide() }
   })
 }
 
 function createTray() {
   try {
-    const iconPath = path.join(__dirname, '../assets/icon.png')
+    // 优先用 tray.png（64px，专为小尺寸优化），fallback 到 icon.png
+    const trayIconPath = path.join(__dirname, '../assets/tray.png')
+    const mainIconPath = path.join(__dirname, '../assets/icon.png')
+    const fs = require('fs')
+    const iconPath = fs.existsSync(trayIconPath) ? trayIconPath : mainIconPath
+
     const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
     tray = new Tray(icon)
     tray.setToolTip('OpenWrt Manager')
@@ -59,7 +62,7 @@ function createTray() {
     ]))
     tray.on('double-click', () => mainWindow?.show())
   } catch (e) {
-    console.warn('托盘图标创建失败（可能缺少 icon.png）:', e.message)
+    console.warn('托盘图标创建失败:', e.message)
   }
 }
 
