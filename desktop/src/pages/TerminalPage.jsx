@@ -1,73 +1,150 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Terminal as TermIcon } from 'lucide-react'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
 
 export default function TerminalPage({ client, config }) {
-  const ref  = useRef(null)
-  const term = useRef(null)
-  const [ready, setReady] = useState(false)
+  const containerRef = useRef(null)
 
-  useEffect(()=>{
-    let xt, fit, ws
-    const init = async () => {
-      const { Terminal } = await import('xterm')
-      const { FitAddon } = await import('@xterm/addon-fit')
-      await import('xterm/css/xterm.css')
-      xt  = new Terminal({ theme:{background:'#0d1117',foreground:'#c9d1d9',cursor:'#58a6ff'}, fontFamily:'"Cascadia Code",monospace', fontSize:14, cursorBlink:true })
-      fit = new FitAddon()
-      xt.loadAddon(fit)
-      xt.open(ref.current)
-      fit.fit()
-      term.current = xt
-      setReady(true)
+  useEffect(() => {
+    if (!containerRef.current) return
 
-      xt.writeln('\x1b[1;34m OpenWrt Manager — SSH 终端\x1b[0m')
-      xt.writeln('\x1b[33m提示：此终端通过 ubus file.exec 执行命令\x1b[0m')
-      xt.writeln('')
+    const term = new Terminal({
+      theme: {
+        background:          '#0d1117',
+        foreground:          '#c9d1d9',
+        cursor:              '#58a6ff',
+        selectionBackground: '#264f78',
+        black:               '#484f58',
+        brightBlack:         '#6e7681',
+        red:                 '#ff7b72',
+        green:               '#3fb950',
+        yellow:              '#d29922',
+        blue:                '#58a6ff',
+        magenta:             '#bc8cff',
+        cyan:                '#39c5cf',
+        white:               '#b1bac4',
+      },
+      fontFamily:  '"Cascadia Code", "JetBrains Mono", "Consolas", monospace',
+      fontSize:    14,
+      lineHeight:  1.5,
+      cursorBlink: true,
+      scrollback:  2000,
+    })
 
-      let cmd = ''
-      xt.onKey(({ key, domEvent }) => {
-        if (domEvent.key === 'Enter') {
-          xt.writeln('')
-          execCmd(cmd)
-          cmd = ''
-        } else if (domEvent.key === 'Backspace') {
-          if (cmd.length > 0) { cmd = cmd.slice(0,-1); xt.write('\b \b') }
-        } else {
-          cmd += key; xt.write(key)
-        }
-      })
+    const fit = new FitAddon()
+    term.loadAddon(fit)
+    term.open(containerRef.current)
+    fit.fit()
 
-      const ro = new ResizeObserver(() => fit.fit())
-      ro.observe(ref.current)
-    }
+    term.writeln('\x1b[1;34m╔═══════════════════════════════╗\x1b[0m')
+    term.writeln('\x1b[1;34m║   OpenWrt Manager  Terminal   ║\x1b[0m')
+    term.writeln('\x1b[1;34m╚═══════════════════════════════╝\x1b[0m')
+    term.writeln('')
+    term.writeln('\x1b[33m通过 ubus file.exec 执行命令\x1b[0m')
+    term.writeln('\x1b[32m已连接到 ' + ((config && config.host) || '路由器') + '\x1b[0m')
+    term.writeln('')
+    term.write('$ ')
+
+    let cmdBuf = ''
+    let history = []
+    let histIdx  = -1
 
     const execCmd = async (cmd) => {
-      if (!cmd.trim()) { xt.write('\r\n$ '); return }
-      const parts = cmd.trim().split(' ')
+      const trimmed = cmd.trim()
+      if (!trimmed) { term.write('\r\n$ '); return }
+
+      // 命令历史
+      history = [trimmed, ...history.filter(c => c !== trimmed)].slice(0, 100)
+      histIdx = -1
+
+      const parts = trimmed.split(/\s+/)
       try {
-        const r = await client.execCommand(parts[0], parts.slice(1))
-        const out = (r.stdout||r.stderr||'').trimEnd()
-        if (out) xt.writeln(out.replace(/\n/g,'\r\n'))
-      } catch(e) {
-        xt.writeln(`\x1b[31m错误: ${e.message}\x1b[0m`)
+        const r   = await client.execCommand(parts[0], parts.slice(1))
+        const out = (r.stdout || r.stderr || '').trimEnd()
+        if (out) term.writeln(out.replace(/\r?\n/g, '\r\n'))
+      } catch (e) {
+        term.writeln('\x1b[31m错误: ' + e.message + '\x1b[0m')
       }
-      xt.write('\r\n$ ')
+      term.write('\r\n$ ')
     }
 
-    init().catch(e=>console.error(e))
-    return () => { xt?.dispose() }
-  },[client])
+    term.onKey(function({ key, domEvent }) {
+      // Ctrl+C
+      if (domEvent.ctrlKey && domEvent.key === 'c') {
+        term.writeln('^C')
+        term.write('$ ')
+        cmdBuf = ''
+        return
+      }
+      // Ctrl+L 清屏
+      if (domEvent.ctrlKey && domEvent.key === 'l') {
+        term.clear()
+        term.write('$ ' + cmdBuf)
+        return
+      }
+
+      switch (domEvent.key) {
+        case 'Enter':
+          term.writeln('')
+          execCmd(cmdBuf)
+          cmdBuf = ''
+          break
+
+        case 'Backspace':
+          if (cmdBuf.length > 0) {
+            cmdBuf = cmdBuf.slice(0, -1)
+            term.write('\b \b')
+          }
+          break
+
+        case 'ArrowUp':
+          if (history.length > 0) {
+            histIdx = Math.min(histIdx + 1, history.length - 1)
+            // 清除当前行
+            term.write('\r$ ' + ' '.repeat(cmdBuf.length) + '\r$ ')
+            cmdBuf = history[histIdx]
+            term.write(cmdBuf)
+          }
+          break
+
+        case 'ArrowDown':
+          histIdx = Math.max(histIdx - 1, -1)
+          term.write('\r$ ' + ' '.repeat(cmdBuf.length) + '\r$ ')
+          cmdBuf = histIdx >= 0 ? history[histIdx] : ''
+          term.write(cmdBuf)
+          break
+
+        default:
+          if (!domEvent.ctrlKey && !domEvent.altKey && !domEvent.metaKey && key) {
+            cmdBuf += key
+            term.write(key)
+          }
+      }
+    })
+
+    const ro = new ResizeObserver(function() { try { fit.fit() } catch (e) {} })
+    ro.observe(containerRef.current)
+
+    return function() { ro.disconnect(); term.dispose() }
+  }, [client, config])
 
   return (
-    <div className="page terminal-page" style={{height:'100%',display:'flex',flexDirection:'column'}}>
+    <div className="page terminal-page"
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="page-header">
-        <h1><TermIcon size={18}/> SSH 终端</h1>
-        <span style={{fontSize:13,color:'#8b949e'}}>
-          {config?.host}  ·  通过 ubus 执行命令
+        <h1><TermIcon size={18} /> SSH 终端</h1>
+        <span style={{ fontSize: 13, color: '#8b949e' }}>
+          {(config && config.host) || '—'} &nbsp;·&nbsp; ubus file.exec
         </span>
       </div>
-      <div className="card" style={{flex:1,padding:0,overflow:'hidden'}}>
-        <div ref={ref} style={{width:'100%',height:'100%',minHeight:480}}/>
+      <div className="card"
+        style={{ flex: 1, padding: 0, overflow: 'hidden', minHeight: 420 }}>
+        <div
+          ref={containerRef}
+          style={{ width: '100%', height: '100%', minHeight: 420 }}
+        />
       </div>
     </div>
   )

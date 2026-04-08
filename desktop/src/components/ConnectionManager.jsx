@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { OpenWrtClient, LANScanner, RouterManager, CaptchaGenerator, WebStorage } from '../../shared/openwrt-client.js';
+import { OpenWrtClient, LANScanner, RouterManager, CaptchaGenerator, WebStorage } from '@shared/openwrt-client.js';
 
 // ─── 全局路由器管理器（单例）────────────────────────────────
 const manager = new RouterManager(WebStorage);
