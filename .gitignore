@@ -1,0 +1,55 @@
+# ── Node ──────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.pnpm-store
+
+# ── Desktop (Electron + Vite) ─────────────────────────────
+desktop/dist/
+desktop/dist-electron/
+desktop/.vite/
+
+# ── Mobile (React Native) ─────────────────────────────────
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/local.properties
+mobile/android/app/release.keystore
+mobile/.bundle/
+mobile/ios/build/
+mobile/ios/Pods/
+mobile/ios/DerivedData/
+
+# ── 签名密钥（绝对不要提交！）────────────────────────────
+*.keystore
+*.jks
+*.p12
+*.cer
+*.pfx
+.env
+.env.local
+.env.production
+
+# ── 小程序 ────────────────────────────────────────────────
+miniprogram/miniprogram_npm/
+miniprogram/.DS_Store
+
+# ── 系统文件 ──────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# ── 构建 / 缓存 ───────────────────────────────────────────
+.cache/
+.turbo/
+.eslintcache
+*.log
+coverage/

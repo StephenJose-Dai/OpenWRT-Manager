@@ -1,0 +1,82 @@
+<!-- pages/firewall/firewall.wxml -->
+<view class="page">
+
+  <!-- 标题栏 -->
+  <view class="top-bar">
+    <text class="page-title">防火墙规则</text>
+    <view class="btn-add" bindtap="toggleForm">{{showForm ? '取消' : '＋ 新增'}}</view>
+  </view>
+
+  <!-- 添加规则表单 -->
+  <view wx:if="{{showForm}}" class="form-card">
+    <view class="field">
+      <text class="flabel">规则名称</text>
+      <input class="finput" placeholder="如：允许HTTP" value="{{form.name}}" data-field="name" bindinput="setField" />
+    </view>
+    <view class="field-row">
+      <view class="field half">
+        <text class="flabel">来源区域</text>
+        <picker mode="selector" range="{{zones}}" bindchange="e => setField({currentTarget:{dataset:{field:'src'}}, detail:{value:zones[e.detail.value]}})">
+          <view class="fpicker">{{form.src}} ▾</view>
+        </picker>
+      </view>
+      <view class="field half">
+        <text class="flabel">目标区域</text>
+        <picker mode="selector" range="{{zones}}" bindchange="e => setField({currentTarget:{dataset:{field:'dest'}}, detail:{value:zones[e.detail.value]}})">
+          <view class="fpicker">{{form.dest}} ▾</view>
+        </picker>
+      </view>
+    </view>
+    <view class="field-row">
+      <view class="field half">
+        <text class="flabel">协议</text>
+        <picker mode="selector" range="{{['tcp','udp','tcpudp','icmp','all']}}" bindchange="setField" data-field="proto">
+          <view class="fpicker">{{form.proto}} ▾</view>
+        </picker>
+      </view>
+      <view class="field half">
+        <text class="flabel">目标端口</text>
+        <input class="finput" placeholder="如 80 或 8080-8090" value="{{form.destPort}}" data-field="destPort" bindinput="setField" />
+      </view>
+    </view>
+    <view class="field">
+      <text class="flabel">动作</text>
+      <picker mode="selector" range="{{['ACCEPT','DROP','REJECT']}}" bindchange="setField" data-field="target">
+        <view class="fpicker">{{form.target}} ▾</view>
+      </picker>
+    </view>
+    <view class="form-btns">
+      <view class="fbtn-cancel" bindtap="toggleForm">取消</view>
+      <view class="fbtn-save {{saving ? 'disabled' : ''}}" bindtap="onAddRule">{{saving ? '保存中...' : '保存规则'}}</view>
+    </view>
+  </view>
+
+  <!-- 规则列表 -->
+  <view wx:if="{{rules.length > 0}}" class="rules-list">
+    <view wx:for="{{rules}}" wx:key="_idx" class="rule-card">
+      <view class="rule-header">
+        <text class="rule-name">{{item.name || '未命名规则'}}</text>
+        <view class="rule-target {{item.target === 'ACCEPT' ? 'accept' : 'drop'}}">
+          {{item.target || 'ACCEPT'}}
+        </view>
+      </view>
+      <view class="rule-meta">
+        <view class="rule-badge blue">{{item.src || '-'}}</view>
+        <text class="rule-arrow">→</text>
+        <view class="rule-badge purple">{{item.dest || '-'}}</view>
+        <text class="rule-dot">·</text>
+        <text class="rule-info">{{item.proto || 'any'}}</text>
+        <text wx:if="{{item.dest_port}}" class="rule-info">:{{item.dest_port}}</text>
+      </view>
+      <view class="rule-delete" bindtap="onDeleteRule" data-idx="{{item._idx}}">删除</view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{!loading && rules.length === 0 && !showForm}}" class="empty">
+    <text class="empty-icon">🛡</text>
+    <text class="empty-text">暂无自定义规则</text>
+    <view class="btn-add-big" bindtap="toggleForm">添加第一条规则</view>
+  </view>
+
+</view>

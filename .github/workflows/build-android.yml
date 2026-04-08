@@ -1,0 +1,240 @@
+name: Build Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+
+permissions:
+  contents: write
+
+env:
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.run_number) }}
+  BUILD_TYPE:  ${{ inputs.build_type || 'release' }}
+
+jobs:
+  # ══════════════════════════════════════════════════════════
+  # Job 1: 构建 Android APK（全架构 + Universal）
+  # ══════════════════════════════════════════════════════════
+  build-android:
+    name: Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 环境准备 ──────────────────────────────────────────
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: 设置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 NDK
+        run: |
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+
+      # ── 依赖安装 ──────────────────────────────────────────
+      - name: 安装 Node 依赖
+        working-directory: mobile
+        run: npm ci
+
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mobile/android/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # ── 签名证书（从 Secrets 还原）────────────────────────
+      - name: 还原签名密钥库
+        if: env.BUILD_TYPE == 'release' && secrets.ANDROID_KEYSTORE_BASE64 != ''
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > mobile/android/app/release.keystore
+          echo "KEYSTORE_FILE=$(pwd)/mobile/android/app/release.keystore" >> $GITHUB_ENV
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: 配置签名环境变量
+        if: env.BUILD_TYPE == 'release' && secrets.ANDROID_KEYSTORE_BASE64 != ''
+        run: |
+          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"             >> $GITHUB_ENV
+          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}"       >> $GITHUB_ENV
+          echo "ANDROID_STORE_PASSWORD=${{ secrets.ANDROID_STORE_PASSWORD }}"   >> $GITHUB_ENV
+          echo "SIGNED_BUILD=true"                                               >> $GITHUB_ENV
+
+      # ── Gradle 配置：注入 ABI splits + 签名 ──────────────
+      - name: 注入构建配置
+        working-directory: mobile/android
+        run: |
+          cat >> gradle.properties << 'EOF'
+          # ABI 分包（生产 4 个独立 APK + 1 个 Universal）
+          reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m
+          org.gradle.parallel=true
+          org.gradle.caching=true
+          EOF
+
+      # ── 构建 ──────────────────────────────────────────────
+      - name: 打 Bundle（JS 资源）
+        working-directory: mobile
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      - name: 编译 APK（分架构 + Universal）
+        working-directory: mobile/android
+        run: |
+          if [ "${{ env.BUILD_TYPE }}" = "release" ]; then
+            ./gradlew assembleRelease \
+              -PversionName="${{ env.APP_VERSION }}" \
+              -PenableSeparateBuildPerCPUArchitecture=true \
+              -PuniversalApk=true \
+              ${{ env.SIGNED_BUILD == 'true' && format('-PkeystoreFile={0} -PkeyAlias={1} -PkeyPassword={2} -PstorePassword={3}', env.KEYSTORE_FILE, env.ANDROID_KEY_ALIAS, env.ANDROID_KEY_PASSWORD, env.ANDROID_STORE_PASSWORD) || '' }}
+          else
+            ./gradlew assembleDebug \
+              -PversionName="${{ env.APP_VERSION }}"
+          fi
+
+      # ── 收集 & 重命名产物 ─────────────────────────────────
+      - name: 收集并重命名 APK
+        run: |
+          set -e
+          VER="${{ env.APP_VERSION }}"
+          TYPE="${{ env.BUILD_TYPE }}"
+          OUT="mobile/android/app/build/outputs/apk/${TYPE}"
+          DEST="apk-output"
+          mkdir -p "$DEST"
+
+          # 架构映射表
+          declare -A ABI_MAP=(
+            ["armeabi-v7a"]="armv7"
+            ["arm64-v8a"]="arm64"
+            ["x86"]="x86"
+            ["x86_64"]="x86_64"
+          )
+
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            src="${OUT}/app-${abi}-${TYPE}.apk"
+            friendly="${ABI_MAP[$abi]}"
+            if [ -f "$src" ]; then
+              cp "$src" "${DEST}/OpenWrtManager-${VER}-android-${friendly}.apk"
+              echo "✓ 已处理: ${friendly}"
+            else
+              echo "⚠ 未找到: $src"
+            fi
+          done
+
+          # Universal APK
+          for f in "${OUT}"/app-universal-*.apk "${OUT}"/app-${TYPE}.apk; do
+            if [ -f "$f" ]; then
+              cp "$f" "${DEST}/OpenWrtManager-${VER}-android-universal.apk"
+              echo "✓ 已处理: universal"
+              break
+            fi
+          done
+
+          echo "── 最终产物 ──"
+          ls -lh "$DEST/"
+
+      # ── 上传 Artifact ─────────────────────────────────────
+      - name: 上传 APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: apk-output/*.apk
+          retention-days: 30
+
+      # ── 生成产物摘要 ──────────────────────────────────────
+      - name: 生成构建摘要
+        run: |
+          echo "## Android 构建结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| APK 文件 | 大小 | 适用设备 |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|------|----------|" >> $GITHUB_STEP_SUMMARY
+          for f in apk-output/*.apk; do
+            size=$(du -h "$f" | cut -f1)
+            name=$(basename "$f")
+            case "$name" in
+              *arm64*)   desc="主流 Android 手机（64位，推荐）" ;;
+              *armv7*)   desc="老款 Android 手机（32位）" ;;
+              *x86_64*)  desc="x86_64 模拟器 / 部分平板" ;;
+              *x86*)     desc="x86 模拟器 / 老款英特尔平板" ;;
+              *universal*)desc="通用包（包含所有架构，体积较大）" ;;
+              *)         desc="--" ;;
+            esac
+            echo "| \`$name\` | $size | $desc |" >> $GITHUB_STEP_SUMMARY
+          done
+
+  # ══════════════════════════════════════════════════════════
+  # Job 2: 发布 Release
+  # ══════════════════════════════════════════════════════════
+  release-android:
+    name: 发布 Android Release
+    needs: build-android
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: 下载 APK 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apks
+          path: release-files
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "OpenWrt Manager ${{ github.ref_name }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          body: |
+            ## Android 下载
+
+            | 文件 | 适用设备 |
+            |------|----------|
+            | `*-arm64.apk` | 主流 Android 手机（64位，**推荐**） |
+            | `*-armv7.apk` | 老款 Android 手机（32位，2015年前） |
+            | `*-x86_64.apk` | x86 模拟器 / 部分 Intel 平板 |
+            | `*-x86.apk` | 老款 x86 模拟器 |
+            | `*-universal.apk` | 通用包（不确定时选这个） |
+
+            > **安装提示**：需要在手机设置中开启「允许未知来源安装」
+          append_body: true   # 追加到已有 Release 说明（配合 Windows workflow）
+          files: release-files/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

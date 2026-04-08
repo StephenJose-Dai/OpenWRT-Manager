@@ -1,0 +1,58 @@
+<!-- pages/devices/devices.wxml -->
+<view class="page">
+
+  <!-- 搜索栏 -->
+  <view class="search-bar">
+    <view class="search-icon">🔍</view>
+    <input class="search-input" placeholder="搜索 IP / MAC / 主机名"
+      value="{{keyword}}" bindinput="onSearch" />
+  </view>
+
+  <!-- 数量统计 -->
+  <view class="count-row">
+    <text class="count-text">在线设备</text>
+    <view class="count-badge">{{devices.length}}</view>
+    <view class="refresh-btn {{loading ? 'spin' : ''}}" bindtap="_fetch">↻</view>
+  </view>
+
+  <!-- 设备列表 -->
+  <view wx:if="{{devices.length > 0}}" class="device-list">
+    <view
+      wx:for="{{devices}}"
+      wx:key="mac"
+      class="device-card"
+      hidden="{{keyword && !(item.hostname || '').toLowerCase().includes(keyword.toLowerCase()) && !item.ip.includes(keyword) && !item.mac.toLowerCase().includes(keyword.toLowerCase())}}"
+    >
+      <view class="device-avatar">
+        <text class="avatar-char">{{(item.hostname || item.ip).charAt(0).toUpperCase()}}</text>
+      </view>
+      <view class="device-info">
+        <text class="device-name">{{item.hostname || '未知设备'}}</text>
+        <text class="device-ip">{{item.ip}}</text>
+        <text class="device-mac">{{item.mac}}</text>
+      </view>
+      <view
+        class="kick-btn {{kicking === item.mac ? 'kicking' : ''}}"
+        bindtap="onKick"
+        data-mac="{{item.mac}}"
+        data-hostname="{{item.hostname}}"
+        data-ip="{{item.ip}}"
+      >
+        <text>{{kicking === item.mac ? '...' : '踢出'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{!loading && devices.length === 0}}" class="empty">
+    <text class="empty-icon">📡</text>
+    <text class="empty-text">暂无在线设备</text>
+    <view class="btn-refresh" bindtap="_fetch">刷新</view>
+  </view>
+
+  <!-- 加载中 -->
+  <view wx:if="{{loading && devices.length === 0}}" class="loading">
+    <text>加载中...</text>
+  </view>
+
+</view>

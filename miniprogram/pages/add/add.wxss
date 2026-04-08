@@ -1,0 +1,56 @@
+/* pages/add/add.wxss */
+page { background: #0f1117; color: #e6edf3; font-family: -apple-system, "PingFang SC", sans-serif; }
+.page { padding: 24rpx 28rpx 100rpx; }
+.form-header { display: flex; align-items: center; gap: 20rpx; margin-bottom: 40rpx; }
+.back-btn   { font-size: 26rpx; color: #8b949e; }
+.form-title { font-size: 34rpx; font-weight: 700; }
+.form { display: flex; flex-direction: column; gap: 28rpx; }
+
+/* Field */
+.field { display: flex; flex-direction: column; gap: 8rpx; }
+.field.error .input { border-color: #f85149; }
+.label    { font-size: 24rpx; color: #8b949e; }
+.required { color: #f85149; }
+.err-msg  { font-size: 22rpx; color: #f85149; }
+
+.input {
+  background: #161b22; border: 1rpx solid #30363d;
+  border-radius: 10rpx; color: #e6edf3;
+  padding: 18rpx 20rpx; font-size: 28rpx;
+  width: 100%;
+}
+.input-row  { display: flex; gap: 12rpx; }
+.flex1      { flex: 1; }
+.port-input { width: 110rpx; flex-shrink: 0; }
+.pwd-row    { display: flex; gap: 12rpx; align-items: center; }
+.show-btn   { font-size: 24rpx; color: #4f8ef7; white-space: nowrap; padding: 0 8rpx; }
+
+/* Test */
+.test-row   { display: flex; align-items: center; gap: 16rpx; }
+.btn-test   { background: #21262d; border: 1rpx solid #30363d; border-radius: 10rpx; padding: 14rpx 28rpx; font-size: 26rpx; color: #e6edf3; }
+.btn-test.disabled { opacity: .5; }
+.test-ok    { font-size: 24rpx; color: #3fb950; }
+.test-fail  { font-size: 24rpx; color: #f85149; }
+
+/* Captcha */
+.captcha-row    { display: flex; gap: 16rpx; align-items: center; }
+.captcha-canvas { width: 200rpx; height: 72rpx; border-radius: 8rpx; flex-shrink: 0; }
+.captcha-input  { flex: 1; }
+.captcha-hint   { font-size: 22rpx; color: #555; }
+.shake          { animation: shake .3s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6rpx)} 75%{transform:translateX(6rpx)} }
+
+/* Checkboxes */
+.checkbox-group  { display: flex; flex-direction: column; gap: 14rpx; }
+.checkbox-item   { display: flex; align-items: center; gap: 12rpx; font-size: 28rpx; color: #e6edf3; }
+.checkbox-item.disabled { opacity: .4; }
+.hint-text       { font-size: 22rpx; color: #555; }
+
+/* Save */
+.btn-save {
+  background: #4f8ef7; border-radius: 14rpx;
+  padding: 28rpx; text-align: center;
+  color: white; font-size: 30rpx; font-weight: 600;
+  margin-top: 12rpx;
+}
+.btn-save.disabled { opacity: .6; }

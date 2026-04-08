@@ -1,0 +1,34 @@
+/* pages/devices/devices.wxss */
+page { background: #0f1117; color: #e6edf3; font-family: -apple-system,"PingFang SC",sans-serif; }
+.page { padding: 20rpx 28rpx 120rpx; }
+
+.search-bar { display: flex; align-items: center; gap: 12rpx; background: #161b22; border: 1rpx solid #30363d; border-radius: 14rpx; padding: 14rpx 20rpx; margin-bottom: 20rpx; }
+.search-icon { font-size: 28rpx; }
+.search-input { flex: 1; font-size: 26rpx; color: #e6edf3; background: none; }
+
+.count-row  { display: flex; align-items: center; gap: 10rpx; margin-bottom: 16rpx; }
+.count-text { font-size: 24rpx; color: #8b949e; font-weight: 500; }
+.count-badge{ background: #1f4a8f33; color: #60a5fa; font-size: 22rpx; padding: 4rpx 14rpx; border-radius: 20rpx; font-weight: 600; }
+.refresh-btn{ font-size: 32rpx; color: #8b949e; margin-left: auto; padding: 6rpx 12rpx; }
+.spin { animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.device-list { display: flex; flex-direction: column; gap: 12rpx; }
+.device-card { display: flex; align-items: center; gap: 16rpx; background: #161b22; border: 1rpx solid #30363d; border-radius: 14rpx; padding: 20rpx; }
+
+.device-avatar { width: 70rpx; height: 70rpx; border-radius: 14rpx; background: #1f3a6e33; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.avatar-char   { font-size: 30rpx; font-weight: 700; color: #60a5fa; }
+.device-info   { flex: 1; min-width: 0; }
+.device-name   { display: block; font-size: 28rpx; font-weight: 600; color: #e6edf3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-ip     { display: block; font-size: 24rpx; color: #8b949e; font-family: monospace; margin-top: 2rpx; }
+.device-mac    { display: block; font-size: 20rpx; color: #484f58; font-family: monospace; margin-top: 2rpx; }
+
+.kick-btn { background: #2a101022; border: 1rpx solid #7f1d1d44; border-radius: 10rpx; padding: 10rpx 20rpx; }
+.kick-btn text { font-size: 24rpx; color: #f85149; }
+.kick-btn.kicking { opacity: .5; }
+
+.empty { padding: 80rpx 0; display: flex; flex-direction: column; align-items: center; gap: 16rpx; }
+.empty-icon { font-size: 80rpx; }
+.empty-text { font-size: 28rpx; color: #8b949e; }
+.btn-refresh { background: #21262d; border: 1rpx solid #30363d; border-radius: 10rpx; padding: 14rpx 36rpx; font-size: 26rpx; color: #e6edf3; }
+.loading { padding: 60rpx; text-align: center; color: #8b949e; font-size: 26rpx; }

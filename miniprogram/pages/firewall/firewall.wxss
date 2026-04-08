@@ -1,0 +1,43 @@
+/* pages/firewall/firewall.wxss */
+page { background: #0f1117; color: #e6edf3; font-family: -apple-system,"PingFang SC",sans-serif; }
+.page { padding: 20rpx 28rpx 120rpx; }
+
+.top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx; }
+.page-title { font-size: 32rpx; font-weight: 700; }
+.btn-add { background: #4f8ef7; color: white; font-size: 26rpx; padding: 12rpx 28rpx; border-radius: 10rpx; font-weight: 500; }
+
+/* Form */
+.form-card { background: #161b22; border: 1rpx solid #30363d; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.field { display: flex; flex-direction: column; gap: 6rpx; }
+.field-row { display: flex; gap: 16rpx; }
+.field.half { flex: 1; }
+.flabel { font-size: 22rpx; color: #8b949e; }
+.finput { background: #0f1117; border: 1rpx solid #30363d; border-radius: 8rpx; padding: 14rpx 16rpx; font-size: 26rpx; color: #e6edf3; }
+.fpicker { background: #0f1117; border: 1rpx solid #30363d; border-radius: 8rpx; padding: 14rpx 16rpx; font-size: 26rpx; color: #e6edf3; }
+.form-btns { display: flex; gap: 12rpx; margin-top: 4rpx; }
+.fbtn-cancel { flex: 1; padding: 18rpx; text-align: center; background: #21262d; border: 1rpx solid #30363d; border-radius: 10rpx; font-size: 26rpx; color: #8b949e; }
+.fbtn-save   { flex: 2; padding: 18rpx; text-align: center; background: #4f8ef7; border-radius: 10rpx; font-size: 26rpx; color: white; font-weight: 500; }
+.fbtn-save.disabled { opacity: .6; }
+
+/* Rules list */
+.rules-list { display: flex; flex-direction: column; gap: 12rpx; }
+.rule-card { background: #161b22; border: 1rpx solid #30363d; border-radius: 14rpx; padding: 20rpx 20rpx 20rpx; position: relative; }
+.rule-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10rpx; }
+.rule-name { font-size: 28rpx; font-weight: 600; flex: 1; margin-right: 12rpx; }
+.rule-target { font-size: 22rpx; padding: 4rpx 14rpx; border-radius: 8rpx; font-weight: 500; }
+.rule-target.accept { background: #14532d33; color: #4ade80; }
+.rule-target.drop   { background: #7f1d1d33; color: #f87171; }
+.rule-meta { display: flex; align-items: center; gap: 10rpx; flex-wrap: wrap; }
+.rule-badge { font-size: 22rpx; padding: 4rpx 12rpx; border-radius: 8rpx; }
+.rule-badge.blue   { background: #1f4a8f33; color: #60a5fa; }
+.rule-badge.purple { background: #4c1d9533; color: #c4b5fd; }
+.rule-arrow { font-size: 22rpx; color: #555; }
+.rule-dot   { font-size: 22rpx; color: #555; }
+.rule-info  { font-size: 22rpx; color: #8b949e; font-family: monospace; }
+.rule-delete { position: absolute; top: 20rpx; right: 20rpx; font-size: 22rpx; color: #f85149; padding: 4rpx 10rpx; }
+
+/* Empty */
+.empty { padding: 80rpx 0; display: flex; flex-direction: column; align-items: center; gap: 16rpx; }
+.empty-icon { font-size: 80rpx; }
+.empty-text { font-size: 28rpx; color: #8b949e; }
+.btn-add-big { background: #4f8ef7; color: white; font-size: 28rpx; padding: 18rpx 48rpx; border-radius: 14rpx; font-weight: 500; margin-top: 10rpx; }

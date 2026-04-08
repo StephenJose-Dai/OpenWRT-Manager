@@ -1,0 +1,124 @@
+<!-- pages/system/system.wxml -->
+<view class="page">
+
+  <!-- Tab 切换 -->
+  <view class="tabs">
+    <view class="tab {{tab === 'info' ? 'active' : ''}}" bindtap="switchTab" data-tab="info">系统信息</view>
+    <view class="tab {{tab === 'wifi' ? 'active' : ''}}" bindtap="switchTab" data-tab="wifi">WiFi 设置</view>
+    <view class="tab {{tab === 'log'  ? 'active' : ''}}" bindtap="switchTab" data-tab="log">系统日志</view>
+  </view>
+
+  <!-- ── 系统信息 Tab ─────────────────────────────── -->
+  <view wx:if="{{tab === 'info'}}">
+
+    <view wx:if="{{info}}" class="info-card">
+      <view class="info-row"><text class="il">主机名</text><text class="iv">{{info.hostname}}</text></view>
+      <view class="info-row"><text class="il">型号</text><text class="iv">{{info.model}}</text></view>
+      <view class="info-row"><text class="il">系统版本</text><text class="iv">{{info.release}}</text></view>
+      <view class="info-row"><text class="il">内核</text><text class="iv">{{info.kernel}}</text></view>
+      <view class="info-row"><text class="il">运行时间</text><text class="iv">{{info.uptimeFmt}}</text></view>
+      <view class="info-row"><text class="il">负载均值</text><text class="iv">{{info.load[0]}} / {{info.load[1]}} / {{info.load[2]}}</text></view>
+      <view class="info-row">
+        <text class="il">内存使用</text>
+        <view class="iv-col">
+          <text class="iv">{{info.memory.usagePct}}%</text>
+          <view class="mini-bar">
+            <view class="mini-fill {{info.memory.usagePct > 80 ? 'danger' : 'ok'}}" style="width:{{info.memory.usagePct}}%" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 操作按钮 -->
+    <view class="action-list">
+      <view class="action-item" bindtap="onReboot">
+        <text class="action-icon-text">⟳</text>
+        <view class="action-content">
+          <text class="action-name">重启路由器</text>
+          <text class="action-desc">重新启动设备，约需 1-2 分钟</text>
+        </view>
+        <text class="action-chevron danger">→</text>
+      </view>
+      <view class="action-item" bindtap="checkUpgrade">
+        <text class="action-icon-text">↑</text>
+        <view class="action-content">
+          <text class="action-name">检查软件升级</text>
+          <text class="action-desc">检查 opkg 可更新的软件包</text>
+        </view>
+        <text class="action-chevron">→</text>
+      </view>
+      <view class="action-item" bindtap="_fetchInfo">
+        <text class="action-icon-text">↻</text>
+        <view class="action-content">
+          <text class="action-name">刷新信息</text>
+          <text class="action-desc">重新获取系统状态</text>
+        </view>
+        <text class="action-chevron">→</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ── WiFi 设置 Tab ───────────────────────────── -->
+  <view wx:if="{{tab === 'wifi'}}">
+    <view wx:if="{{wifiNetworks.length > 0}}">
+      <!-- 网络列表 -->
+      <view class="wifi-list">
+        <view
+          wx:for="{{wifiNetworks}}"
+          wx:key="_section"
+          class="wifi-item {{wifiForm.iface === item._section ? 'selected' : ''}}"
+          bindtap="onWifiSelect"
+          data-section="{{item._section}}"
+        >
+          <text class="wifi-icon">📶</text>
+          <view class="wifi-info">
+            <text class="wifi-ssid">{{item.ssid || '(隐藏网络)'}}</text>
+            <text class="wifi-section">{{item._section}} · {{item.mode || 'ap'}}</text>
+          </view>
+          <view wx:if="{{wifiForm.iface === item._section}}" class="wifi-check">✓</view>
+        </view>
+      </view>
+
+      <!-- 修改密码表单 -->
+      <view class="form-card">
+        <view class="field">
+          <text class="flabel">当前选中：{{wifiForm.ssid || wifiForm.iface}}</text>
+        </view>
+        <view class="field">
+          <text class="flabel">新密码（至少8位）</text>
+          <view class="pwd-row">
+            <input class="finput flex1" password="{{!wifiForm.showPwd}}"
+              placeholder="输入新的 WiFi 密码"
+              value="{{wifiForm.password}}"
+              data-field="password"
+              bindinput="setWifiField" />
+            <view class="show-btn" bindtap="toggleWifiPwd">{{wifiForm.showPwd ? '隐藏' : '显示'}}</view>
+          </view>
+        </view>
+        <view class="fbtn-save {{wifiSaving ? 'disabled' : ''}}" bindtap="saveWifiPassword">
+          {{wifiSaving ? '更新中...' : '更新 WiFi 密码'}}
+        </view>
+        <text class="warn-text">⚠ 修改后所有设备将断开连接，需重新连接</text>
+      </view>
+    </view>
+
+    <view wx:else class="empty">
+      <text class="empty-icon">📶</text>
+      <text class="empty-text">未检测到 WiFi 接口</text>
+    </view>
+  </view>
+
+  <!-- ── 系统日志 Tab ─────────────────────────────── -->
+  <view wx:if="{{tab === 'log'}}">
+    <view wx:if="{{logLoading}}" class="loading"><text>加载日志中...</text></view>
+    <scroll-view wx:else scroll-y class="log-viewer">
+      <view wx:for="{{log}}" wx:key="index" class="log-line">
+        <text class="{{item.includes('err') || item.includes('ERR') ? 'log-err' : item.includes('warn') || item.includes('WARN') ? 'log-warn' : 'log-normal'}}">{{item}}</text>
+      </view>
+    </scroll-view>
+    <view class="log-actions">
+      <view class="btn-refresh-log" bindtap="_fetchLog">↻ 刷新日志</view>
+    </view>
+  </view>
+
+</view>

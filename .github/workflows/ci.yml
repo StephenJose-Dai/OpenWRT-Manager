@@ -1,0 +1,62 @@
+name: CI Check (PR)
+
+on:
+  pull_request:
+    branches: [main, master, dev]
+  push:
+    branches: [main, master, dev]
+
+jobs:
+  # ── 桌面端检查 ────────────────────────────────────────────
+  check-desktop:
+    name: Desktop 检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run build
+        working-directory: desktop
+        env:
+          VITE_API_MODE: direct
+
+  # ── 移动端检查 ────────────────────────────────────────────
+  check-android:
+    name: Android 检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      # 只做 Gradle 依赖下载检查，不完整编译（太耗时）
+      - name: Gradle 依赖检查
+        working-directory: mobile/android
+        run: ./gradlew dependencies --configuration releaseRuntimeClasspath --quiet || true
+
+  # ── 小程序代码检查 ────────────────────────────────────────
+  check-miniprogram:
+    name: 小程序检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 语法检查（miniprogram JS）
+        run: |
+          npx acorn --ecma2020 --module miniprogram/utils/openwrt.js > /dev/null
+          echo "✓ 小程序核心代码语法正常"

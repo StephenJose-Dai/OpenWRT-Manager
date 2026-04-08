@@ -1,0 +1,53 @@
+<!-- pages/traffic/traffic.wxml -->
+<view class="page">
+
+  <!-- 接口选择 -->
+  <scroll-view class="iface-tabs" scroll-x>
+    <view
+      wx:for="{{interfaces}}"
+      wx:key="name"
+      class="iface-tab {{item.name === activeIface ? 'active' : ''}} {{item.up ? '' : 'down'}}"
+      bindtap="onIfaceTap"
+      data-name="{{item.name}}"
+    >
+      <text>{{item.name}}</text>
+      <view class="tab-dot {{item.up ? 'up' : 'down'}}" />
+    </view>
+  </scroll-view>
+
+  <!-- 当前速率卡片 -->
+  <view class="speed-card">
+    <view class="speed-item">
+      <text class="speed-label">↓ 下行</text>
+      <text class="speed-val rx">{{current ? current.rxFmt : '--'}}</text>
+    </view>
+    <view class="speed-divider" />
+    <view class="speed-item">
+      <text class="speed-label">↑ 上行</text>
+      <text class="speed-val tx">{{current ? current.txFmt : '--'}}</text>
+    </view>
+  </view>
+
+  <!-- 历史折线图（Canvas 绘制）-->
+  <view class="chart-card">
+    <text class="chart-title">实时速率（最近 20 次采样，3秒/次）</text>
+    <canvas
+      id="traffic-chart"
+      type="2d"
+      class="chart-canvas"
+    />
+  </view>
+
+  <!-- 总流量 -->
+  <view class="total-card">
+    <view class="total-row">
+      <text class="total-label">累计下载</text>
+      <text class="total-val rx">{{totalRx > 0 ? (totalRx / 1048576).toFixed(1) + ' MB' : '--'}}</text>
+    </view>
+    <view class="total-row">
+      <text class="total-label">累计上传</text>
+      <text class="total-val tx">{{totalTx > 0 ? (totalTx / 1048576).toFixed(1) + ' MB' : '--'}}</text>
+    </view>
+  </view>
+
+</view>

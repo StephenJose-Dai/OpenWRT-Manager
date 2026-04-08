@@ -1,0 +1,113 @@
+<!-- pages/dashboard/dashboard.wxml -->
+<view class="page">
+
+  <!-- 顶部：路由器选择 + 状态 -->
+  <view class="topbar">
+    <view class="router-switcher" bindtap="toggleSwitcher">
+      <view class="status-dot {{online ? 'online' : 'offline'}}" />
+      <text class="router-name">{{info.hostname || '路由器'}}</text>
+      <text class="switcher-arrow">{{switcherOpen ? '▲' : '▼'}}</text>
+    </view>
+    <view class="topbar-right">
+      <view class="refresh-btn" bindtap="onRefresh">
+        <text class="{{loading ? 'spin' : ''}}">↻</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 路由器切换下拉 -->
+  <view wx:if="{{switcherOpen}}" class="switcher-dropdown">
+    <view
+      wx:for="{{routers}}"
+      wx:key="id"
+      class="switcher-item {{item.id === activeId ? 'active' : ''}}"
+      bindtap="onSwitchRouter"
+      data-id="{{item.id}}"
+    >
+      <view class="switcher-dot {{item.id === activeId ? 'active' : ''}}" />
+      <view class="switcher-info">
+        <text class="switcher-label">{{item.label || item.host}}</text>
+        <text class="switcher-host">{{item.host}}</text>
+      </view>
+      <text wx:if="{{item.id === activeId}}" class="switcher-check">✓</text>
+    </view>
+    <navigator url="/pages/index/index" class="switcher-add">＋ 添加路由器</navigator>
+  </view>
+
+  <!-- 离线提示 -->
+  <view wx:if="{{!online && !loading}}" class="offline-banner">
+    <text>路由器离线或连接失败</text>
+    <view class="btn-retry" bindtap="onRefresh">重试</view>
+  </view>
+
+  <!-- 系统信息卡片 -->
+  <view wx:if="{{info}}" class="info-card">
+    <view class="info-row">
+      <text class="info-label">型号</text>
+      <text class="info-val">{{info.model}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">系统</text>
+      <text class="info-val">{{info.release}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">运行时间</text>
+      <text class="info-val">{{info.uptimeFmt}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">负载</text>
+      <text class="info-val">{{info.load[0]}} / {{info.load[1]}} / {{info.load[2]}}</text>
+    </view>
+  </view>
+
+  <!-- 内存进度条 -->
+  <view wx:if="{{info}}" class="mem-card">
+    <view class="mem-header">
+      <text class="card-title">内存使用</text>
+      <text class="mem-pct">{{info.memory.usagePct}}%</text>
+    </view>
+    <view class="progress-bar">
+      <view class="progress-fill {{info.memory.usagePct > 80 ? 'danger' : info.memory.usagePct > 60 ? 'warn' : 'ok'}}"
+            style="width:{{info.memory.usagePct}}%"/>
+    </view>
+  </view>
+
+  <!-- 网络接口列表 -->
+  <view wx:if="{{interfaces.length > 0}}" class="iface-card">
+    <text class="card-title">网络接口</text>
+    <view class="iface-list">
+      <view wx:for="{{interfaces}}" wx:key="name" class="iface-item {{item.up ? 'up' : 'down'}}">
+        <view class="iface-left">
+          <view class="iface-dot {{item.up ? 'up' : 'down'}}" />
+          <text class="iface-name">{{item.name}}</text>
+          <text wx:if="{{item.ip}}" class="iface-ip">{{item.ip}}</text>
+        </view>
+        <view class="iface-right">
+          <text class="iface-stat">↓{{item.rx > 0 ? (item.rx / 1048576).toFixed(1) + 'MB' : '--'}}</text>
+          <text class="iface-stat">↑{{item.tx > 0 ? (item.tx / 1048576).toFixed(1) + 'MB' : '--'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-grid">
+    <navigator url="/pages/devices/devices" class="action-btn">
+      <text class="action-icon">📱</text>
+      <text>设备管理</text>
+    </navigator>
+    <navigator url="/pages/traffic/traffic" class="action-btn">
+      <text class="action-icon">📊</text>
+      <text>流量统计</text>
+    </navigator>
+    <navigator url="/pages/firewall/firewall" class="action-btn">
+      <text class="action-icon">🛡</text>
+      <text>防火墙</text>
+    </navigator>
+    <view class="action-btn danger" bindtap="onReboot">
+      <text class="action-icon">⟳</text>
+      <text>重启路由器</text>
+    </view>
+  </view>
+
+</view>

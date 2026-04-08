@@ -1,0 +1,32 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/add/add",
+    "pages/dashboard/dashboard",
+    "pages/devices/devices",
+    "pages/traffic/traffic",
+    "pages/firewall/firewall",
+    "pages/system/system"
+  ],
+  "window": {
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#0f1117",
+    "navigationBarTitleText": "OpenWrt Manager",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0f1117"
+  },
+  "tabBar": {
+    "color": "#8b949e",
+    "selectedColor": "#4f8ef7",
+    "backgroundColor": "#161b22",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/index/index",     "text": "路由器",   "iconPath": "assets/router.png",   "selectedIconPath": "assets/router-on.png" },
+      { "pagePath": "pages/devices/devices", "text": "设备",     "iconPath": "assets/devices.png",  "selectedIconPath": "assets/devices-on.png" },
+      { "pagePath": "pages/traffic/traffic", "text": "流量",     "iconPath": "assets/traffic.png",  "selectedIconPath": "assets/traffic-on.png" },
+      { "pagePath": "pages/system/system",   "text": "系统",     "iconPath": "assets/system.png",   "selectedIconPath": "assets/system-on.png" }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

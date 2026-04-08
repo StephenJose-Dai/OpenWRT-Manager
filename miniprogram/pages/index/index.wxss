@@ -1,0 +1,100 @@
+/* pages/index/index.wxss */
+page { background: #0f1117; color: #e6edf3; font-family: -apple-system, "PingFang SC", sans-serif; }
+
+.page { padding: 24rpx 28rpx 100rpx; min-height: 100vh; }
+
+/* Header */
+.header { margin-bottom: 40rpx; }
+.header-logo { display: flex; align-items: center; gap: 20rpx; }
+.logo-img { width: 56rpx; height: 56rpx; }
+.title   { display: block; font-size: 36rpx; font-weight: 700; color: #e6edf3; }
+.subtitle{ display: block; font-size: 24rpx; color: #8b949e; margin-top: 4rpx; }
+
+/* Section */
+.section { margin-bottom: 40rpx; }
+.section-title { font-size: 22rpx; color: #8b949e; text-transform: uppercase; margin-bottom: 16rpx; font-weight: 500; letter-spacing: 1px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16rpx; }
+
+/* Router cards */
+.router-list { display: flex; flex-direction: column; gap: 16rpx; margin-bottom: 16rpx; }
+.router-card {
+  background: #161b22;
+  border: 1rpx solid #30363d;
+  border-radius: 16rpx;
+  display: flex; align-items: center; gap: 20rpx;
+  padding: 24rpx 20rpx;
+  position: relative;
+  transition: border-color .2s;
+}
+.router-card.active { border-color: #4f8ef7; }
+.router-icon { width: 72rpx; height: 72rpx; border-radius: 14rpx; background: #1f3a6e33; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.card-icon { width: 44rpx; height: 44rpx; }
+.router-info { flex: 1; min-width: 0; }
+.router-label { display: block; font-size: 30rpx; font-weight: 600; color: #e6edf3; }
+.router-host  { display: block; font-size: 24rpx; color: #8b949e; margin-top: 4rpx; }
+.router-tags  { display: flex; gap: 8rpx; margin-top: 8rpx; flex-wrap: wrap; }
+.tag { font-size: 20rpx; padding: 2rpx 10rpx; border-radius: 10rpx; }
+.tag-blue  { background: #1f4a8f33; color: #60a5fa; }
+.tag-green { background: #14532d33; color: #4ade80; }
+.tag-gray  { background: #21262d; color: #8b949e; }
+.router-arrow { color: #8b949e; font-size: 28rpx; }
+.router-delete { position: absolute; top: 16rpx; right: 20rpx; color: #555; font-size: 24rpx; padding: 8rpx; }
+
+/* Scan */
+.btn-scan {
+  background: #21262d; border: 1rpx solid #30363d;
+  border-radius: 10rpx; padding: 10rpx 24rpx;
+  font-size: 24rpx; color: #e6edf3;
+}
+.btn-scan.disabled { opacity: .5; }
+
+.scan-anim {
+  padding: 40rpx 0; text-align: center;
+  position: relative; display: flex;
+  flex-direction: column; align-items: center;
+  gap: 20rpx;
+  background: #161b22; border-radius: 16rpx;
+  border: 1rpx solid #30363d;
+}
+.scan-ring {
+  position: absolute; top: 50%; left: 50%;
+  width: 80rpx; height: 80rpx;
+  margin: -40rpx 0 0 -40rpx;
+  border: 2rpx solid #4f8ef7;
+  border-radius: 50%; opacity: 0;
+  animation: ripple 2s ease-out infinite;
+}
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: .6s; }
+.r3 { animation-delay: 1.2s; }
+@keyframes ripple { 0%{transform:scale(.5);opacity:.8} 100%{transform:scale(3);opacity:0} }
+.scan-text { font-size: 26rpx; color: #8b949e; margin-top: 80rpx; }
+
+/* Found list */
+.found-list { display: flex; flex-direction: column; gap: 12rpx; }
+.found-card {
+  display: flex; align-items: center; gap: 16rpx;
+  padding: 20rpx 20rpx;
+  background: #0e2a1e; border: 1rpx solid #1a4a30;
+  border-radius: 14rpx;
+}
+.found-dot { width: 16rpx; height: 16rpx; background: #3fb950; border-radius: 50%; flex-shrink: 0; animation: blink 2s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.found-info { flex: 1; }
+.found-host { display: block; font-size: 28rpx; font-weight: 600; color: #e6edf3; }
+.found-sub  { display: block; font-size: 22rpx; color: #8b949e; margin-top: 4rpx; }
+.found-arrow { color: #3fb950; font-size: 28rpx; }
+
+/* Buttons */
+.btn-add-more {
+  width: 100%; padding: 22rpx; text-align: center;
+  background: #161b22; border: 2rpx dashed #30363d;
+  border-radius: 16rpx; color: #8b949e; font-size: 28rpx;
+}
+.btn-manual {
+  width: 100%; padding: 28rpx; text-align: center;
+  background: #4f8ef7; border-radius: 16rpx;
+  color: white; font-size: 30rpx; font-weight: 600;
+}
+.empty { padding: 40rpx 0; text-align: center; display: flex; flex-direction: column; gap: 10rpx; }
+.empty text { display: block; font-size: 26rpx; color: #555; }
