@@ -29,14 +29,16 @@ function getSmartGateways() {
   try {
     let routeGWs = []
     if (process.platform === 'win32') {
-      const out = execSync(
-        'powershell -NoProfile -Command ' +
-        '"Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | ' +
-        'Sort-Object -Property {[int]$_.RouteMetric} | ' +
-        'ForEach-Object { $_.NextHop } | ' +
-        'Where-Object { $_ -ne '0.0.0.0' -and $_ -ne '' }"',
-        { timeout: 5000, encoding: 'utf8' }
-      )
+      // 用 wmic 或 PowerShell 读默认路由网关
+      // 注意：PowerShell 命令里的单引号必须用 `'` 形式传入，避免 JS 字符串冲突
+      const psCmd = [
+        'powershell -NoProfile -Command',
+        '"Get-NetRoute -DestinationPrefix 0.0.0.0/0 -ErrorAction SilentlyContinue',
+        '| Sort-Object -Property {[int]$_.RouteMetric}',
+        '| ForEach-Object { $_.NextHop }',
+        '| Where-Object { $_ -ne \\"0.0.0.0\\" -and $_ -ne \\"\\" }"'
+      ].join(' ')
+      const out = execSync(psCmd, { timeout: 5000, encoding: 'utf8' })
       routeGWs = out.trim().split('\n')
         .map(s => s.trim())
         .filter(s => /^\d+\.\d+\.\d+\.\d+$/.test(s))

@@ -17,8 +17,27 @@ function removeElectronCrossorigin() {
   }
 }
 
+// 插件：build 完成后把 assets/icon.png 复制到 dist/assets/icon.png
+// 这样渲染进程里 src="./assets/icon.png" 能找到图标
+import { copyFileSync, mkdirSync } from 'fs'
+
+function copyIconPlugin() {
+  return {
+    name: 'copy-icon',
+    closeBundle() {
+      try {
+        mkdirSync('dist/assets', { recursive: true })
+        copyFileSync('assets/icon.png', 'dist/assets/icon.png')
+        console.log('✓ icon.png copied to dist/assets/')
+      } catch(e) {
+        console.warn('icon copy failed:', e.message)
+      }
+    }
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), removeElectronCrossorigin()],
+  plugins: [react(), removeElectronCrossorigin(), copyIconPlugin()],
   base: './',
 
   build: {
