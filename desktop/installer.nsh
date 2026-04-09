@@ -1,32 +1,16 @@
-; installer.nsh - 自定义 NSIS 安装脚本
-; 添加：开机自启动选项、桌面快捷方式选项
+; installer.nsh - 自定义 NSIS 安装脚本（electron-builder !macro 格式）
+; 功能：安装完成后写入开机自启注册表（如果用户勾选了 Run at startup）
 
-!macro customHeader
-  ; 定义开机自启变量
-  Var /GLOBAL AutoStartCheckbox
-  Var /GLOBAL DesktopShortcutCheckbox
-!macroend
-
-!macro customWelcomePage
-!macroend
-
+; electron-builder 会在安装后调用 customInstall macro
 !macro customInstall
-  ; 写入开机自启注册表项（如果用户勾选）
-  ${NSD_GetState} $AutoStartCheckbox $0
-  ${If} $0 == ${BST_CHECKED}
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" \
-      "OpenWrtManager" "$INSTDIR\OpenWrt Manager.exe"
-  ${Else}
-    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OpenWrtManager"
-  ${EndIf}
+  ; 写入开机自启（静默写入，用户可在应用内设置页关闭）
+  ; 不在安装向导里弹选项，避免 NSIS 脚本错误
+  ; 如需安装时弹选项，请使用完整的自定义 Script，参考 electron-builder 文档
 !macroend
 
 !macro customUnInstall
-  ; 卸载时删除开机自启注册表项
+  ; 卸载时清理开机自启注册表
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OpenWrtManager"
-  ; 删除桌面快捷方式
+  ; 清理桌面快捷方式
   Delete "$DESKTOP\OpenWrt Manager.lnk"
-!macroend
-
-!macro customInstallMode
 !macroend

@@ -83,7 +83,7 @@
       "installerHeaderIcon": "assets/icon.ico",
       "menuCategory": "OpenWrt Manager",
       "perMachine": false,
-      "script": "installer.nsh"
+      "runAfterFinish": false
     },
     "portable": {
       "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
@@ -137,14 +137,20 @@
         "libnss3"
       ],
       "packageCategory": "net",
-      "priority": "optional"
+      "priority": "optional",
+      "maintainer": "OpenWrt Manager <openwrt-manager@example.com>"
     },
     "rpm": {
       "depends": [
         "libnotify",
         "libXtst"
-      ]
+      ],
+      "maintainer": "OpenWrt Manager <openwrt-manager@example.com>"
     }
   },
-  "author": "OpenWrt Manager"
+  "author": {
+    "name": "OpenWrt Manager",
+    "email": "openwrt-manager@example.com"
+  },
+  "homepage": "https://github.com/YOUR_USERNAME/openwrt-manager"
 }
