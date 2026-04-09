@@ -1,11 +1,27 @@
 const {
   app, BrowserWindow, ipcMain, Tray, Menu,
-  nativeImage, shell, session, autoUpdater, dialog
+  nativeImage, shell, session, net, dialog
 } = require('electron')
-const path = require('path')
-const fs   = require('fs')
-const url  = require('url')
-const os   = require('os')
+const path    = require('path')
+const fs      = require('fs')
+const url     = require('url')
+const os      = require('os')
+const { execSync } = require('child_process')
+
+// ── 性能优化：GPU 加速 + 禁用无用功能 ─────────────────────
+app.commandLine.appendSwitch('disable-http-cache', 'false')
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder')
+app.commandLine.appendSwitch('disable-frame-rate-limit')
+
+// ── 忽略 SSL 证书错误（允许连接 HTTPS 但证书无效的路由器）──
+app.commandLine.appendSwitch('ignore-certificate-errors')
+app.commandLine.appendSwitch('ignore-ssl-errors')
+
+// 还需要在 app 级别处理 certificate-error 事件
+app.on('certificate-error', (event, webContents, certUrl, error, cert, callback) => {
+  event.preventDefault()
+  callback(true)  // true = 信任此证书
+})
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 const APP_VERSION = app.getVersion()
@@ -16,21 +32,14 @@ function getDistDir() {
   return path.join(process.resourcesPath, 'dist')
 }
 
-const { execSync } = require('child_process')
-
-// 智能获取路由器网关候选地址
-// 优先级：系统路由表默认路由 > 活跃物理网卡推算
-// 自动过滤：Docker/VPN/VMware/WSL 等虚拟网卡
+// ── 智能网关检测 ───────────────────────────────────────────
 function getSmartGateways() {
-  const primary   = []   // 路由表直接读到的，最准确
-  const secondary = []   // 网卡推算的，备用
+  const primary   = []
+  const secondary = []
 
-  // ── 方法1：读系统路由表（最准确）──────────────────────
   try {
     let routeGWs = []
     if (process.platform === 'win32') {
-      // 用 wmic 或 PowerShell 读默认路由网关
-      // 注意：PowerShell 命令里的单引号必须用 `'` 形式传入，避免 JS 字符串冲突
       const psCmd = [
         'powershell -NoProfile -Command',
         '"Get-NetRoute -DestinationPrefix 0.0.0.0/0 -ErrorAction SilentlyContinue',
@@ -39,11 +48,9 @@ function getSmartGateways() {
         '| Where-Object { $_ -ne \\"0.0.0.0\\" -and $_ -ne \\"\\" }"'
       ].join(' ')
       const out = execSync(psCmd, { timeout: 5000, encoding: 'utf8' })
-      routeGWs = out.trim().split('\n')
-        .map(s => s.trim())
+      routeGWs = out.trim().split('\n').map(s => s.trim())
         .filter(s => /^\d+\.\d+\.\d+\.\d+$/.test(s))
     } else {
-      // Linux / macOS
       const out = execSync(
         'ip route show default 2>/dev/null || netstat -rn 2>/dev/null | grep "^0\\.0\\.0\\.0"',
         { timeout: 2000, encoding: 'utf8', shell: true }
@@ -52,9 +59,8 @@ function getSmartGateways() {
       routeGWs = ms.map(m => m[1]).filter(Boolean)
     }
     primary.push(...new Set(routeGWs))
-  } catch (e) {}
+  } catch {}
 
-  // ── 方法2：从活跃物理网卡推算（过滤虚拟网卡）────────
   // TAP(OpenVPN)/TUN(WireGuard) kept - users may scan VPN subnets
   // 只过滤绝对不是路由器的虚拟接口（保留 tun/tap 供 VPN 用户使用）
   const virtualRE = /^(lo$|lo0$|loopback|docker|veth[a-f0-9]+|virbr[0-9]|br-[a-f0-9]+|dummy[0-9]|npcap|npf)/i
@@ -64,7 +70,6 @@ function getSmartGateways() {
     for (const a of addrs) {
       if (a.family !== 'IPv4' || a.internal) continue
       const subnet = a.address.split('.').slice(0, 3).join('.')
-      // 如果路由表里已有这个子网，跳过（避免重复）
       if (primary.some(gw => gw.startsWith(subnet + '.'))) continue
       secondary.push(subnet + '.1')
       secondary.push(subnet + '.254')
@@ -72,16 +77,16 @@ function getSmartGateways() {
   }
 
   return {
-    primary,                                         // 路由表直接读到
-    secondary: [...new Set(secondary)],             // 网卡推算
-    all: [...new Set([...primary, ...secondary])]   // 全部候选，primary 优先
+    primary,
+    secondary: [...new Set(secondary)],
+    all: [...new Set([...primary, ...secondary])]
   }
 }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200, height: 780,
-    minWidth: 860, minHeight: 580,
+    width: 1280, height: 820,
+    minWidth: 900, minHeight: 600,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0d1117',
@@ -90,8 +95,10 @@ function createWindow() {
       nodeIntegration:  false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: false,  // 关闭 webSecurity，允许连接任意 HTTP 路由器
+      webSecurity: false,
       sandbox: false,
+      // 忽略 SSL 证书（让用户可以连接证书无效的 HTTPS 路由器）
+      allowRunningInsecureContent: true,
     },
     icon: path.join(__dirname, '../assets/icon.png')
   })
@@ -106,66 +113,96 @@ function createWindow() {
       path.join(getDistDir(), 'index.html')
     ).href
     mainWindow.loadURL(indexUrl)
+    // F12 打开 DevTools
+    mainWindow.webContents.on('before-input-event', (_, input) => {
+      if (input.key === 'F12') mainWindow.webContents.openDevTools({ mode: 'detach' })
+    })
   }
 
-  // 窗口控制
-  ipcMain.handle('window:minimize', () => mainWindow?.minimize())
-  ipcMain.handle('window:maximize', () =>
-    mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
-  )
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
   ipcMain.on('window:maximize', () =>
     mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
   )
   ipcMain.on('window:close', () => mainWindow?.hide())
 
-  // 获取本机网关（用于智能扫描）
   ipcMain.handle('net:getGateways', () => getSmartGateways())
+  ipcMain.handle('app:getVersion',  () => APP_VERSION)
+  ipcMain.handle('shell:openExternal', (_, u) => u && shell.openExternal(u))
+  ipcMain.on('shell:openExternal',     (_, u) => u && shell.openExternal(u))
 
-  // 获取 App 版本
-  ipcMain.handle('app:getVersion', () => APP_VERSION)
+  // 开机自启
+  ipcMain.handle('app:getAutoStart', () => {
+    if (process.platform !== 'win32') return false
+    try {
+      const { execSync } = require('child_process')
+      const out = execSync(
+        'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v OpenWrtManager',
+        { encoding: 'utf8' }
+      )
+      return out.includes('OpenWrtManager')
+    } catch { return false }
+  })
 
-  // 打开外部链接
-  ipcMain.on('shell:openExternal', (_, u) => shell.openExternal(u))
+  ipcMain.handle('app:setAutoStart', (_, enable) => {
+    if (process.platform !== 'win32') return
+    const { execSync } = require('child_process')
+    const exePath = process.execPath
+    if (enable) {
+      execSync(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v OpenWrtManager /t REG_SZ /d "${exePath}" /f`)
+    } else {
+      try { execSync('reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v OpenWrtManager /f') } catch {}
+    }
+  })
 
   // 检查更新
   ipcMain.handle('app:checkUpdate', async () => {
-    const { net } = require('electron')
     try {
-      const request = net.request(
-        'https://api.github.com/repos/YOUR_USERNAME/openwrt-manager/releases/latest'
-      )
+      const req = net.request('https://api.github.com/repos/YOUR_USERNAME/openwrt-manager/releases/latest')
       return new Promise((resolve) => {
         let data = ''
-        request.on('response', (res) => {
+        req.on('response', res => {
           res.on('data', c => { data += c })
           res.on('end', () => {
             try {
-              const json = JSON.parse(data)
-              resolve({ tag: json.tag_name, url: json.html_url, body: json.body })
+              const j = JSON.parse(data)
+              resolve({ tag: j.tag_name, url: j.html_url, body: j.body || '' })
             } catch { resolve(null) }
           })
         })
-        request.on('error', () => resolve(null))
-        request.end()
+        req.on('error', () => resolve(null))
+        req.end()
       })
     } catch { return null }
   })
 
-  // F12 打开 DevTools（生产版本调试用）
-  mainWindow.webContents.on('before-input-event', (_, input) => {
-    if (input.key === 'F12') mainWindow.webContents.openDevTools({ mode: 'detach' })
+  // 开机自启
+  ipcMain.handle('app:getAutoStart', () => {
+    if (process.platform !== 'win32') return false
+    try {
+      const { execSync: e } = require('child_process')
+      const out = e('reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v OpenWrtManager 2>nul', { encoding: 'utf8' })
+      return out.includes('OpenWrtManager')
+    } catch { return false }
+  })
+  ipcMain.handle('app:setAutoStart', (_, enabled) => {
+    if (process.platform !== 'win32') return
+    try {
+      const { execSync: e } = require('child_process')
+      const exePath = process.execPath
+      if (enabled) {
+        e(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v OpenWrtManager /t REG_SZ /d "${exePath}" /f`, { encoding: 'utf8' })
+      } else {
+        e('reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v OpenWrtManager /f 2>nul', { encoding: 'utf8' })
+      }
+    } catch {}
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url: u }) => {
-    shell.openExternal(u)
-    return { action: 'deny' }
+    shell.openExternal(u); return { action: 'deny' }
   })
-
   mainWindow.webContents.on('render-process-gone', (_, details) => {
     if (details.reason !== 'clean-exit') mainWindow.reload()
   })
-
   mainWindow.on('close', e => {
     if (!app.isQuitting) { e.preventDefault(); mainWindow.hide() }
   })
@@ -180,45 +217,37 @@ function createTray() {
     tray = new Tray(icon)
     tray.setToolTip('OpenWrt Manager')
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: '显示窗口',  click: () => mainWindow?.show() },
-      { label: '检查更新',  click: () => mainWindow?.webContents.send('trigger:checkUpdate') },
+      { label: '显示窗口', click: () => mainWindow?.show() },
+      { label: '检查更新', click: () => mainWindow?.webContents.send('trigger:checkUpdate') },
       { type: 'separator' },
-      { label: '退出',      click: () => { app.isQuitting = true; app.quit() } }
+      { label: '退出', click: () => { app.isQuitting = true; app.quit() } }
     ]))
     tray.on('double-click', () => mainWindow?.show())
-  } catch (e) {
-    console.warn('托盘初始化失败:', e.message)
-  }
+  } catch (e) { console.warn('托盘初始化失败:', e.message) }
 }
 
 app.whenReady().then(() => {
-  // 完全移除 CSP：Electron 应用不需要 CSP，安全由主进程控制
-  // CSP 会阻止连接任意 IP 的路由器，对 OpenWrt Manager 没有意义
-  // 跳过证书验证：允许连接自签名证书的路由器（内网 HTTPS 常见情况）
-  session.defaultSession.setCertificateVerifyProc((request, callback) => {
-    // 只对私有 IP 段跳过证书验证，公网域名仍然验证
-    const privateIP = /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/
-    if (privateIP.test(request.hostname) || request.hostname === 'localhost') {
-      callback(0)  // 0 = OK，跳过验证
-    } else {
-      callback(-3) // -3 = 使用默认验证
-    }
-  })
-
+  // 移除 CSP
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const headers = { ...details.responseHeaders }
     delete headers['content-security-policy']
     delete headers['Content-Security-Policy']
     callback({ responseHeaders: headers })
   })
+  // ── 启动性能优化 ──────────────────────────────────────
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')     // 防止后台节流
+  app.commandLine.appendSwitch('disable-background-timer-throttling') // 防止定时器节流
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows') // 遮挡时不节流
+  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256')   // 限制内存
+
+  // 忽略证书错误（支持自签名 HTTPS 路由器）
+  app.commandLine.appendSwitch('ignore-certificate-errors')
 
   createWindow()
   createTray()
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
   else mainWindow?.show()

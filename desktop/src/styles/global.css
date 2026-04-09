@@ -288,9 +288,29 @@ label { font-size: 11px; color: var(--muted); display: block; }
 
 /* ── Connection manager ────────────────────────────────── */
 .conn-manager {
-  min-height: 100vh; background: var(--bg); color: var(--text);
+  /* 全屏居中，不再限制宽度 */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
   font-family: -apple-system, "PingFang SC", sans-serif;
-  max-width: 540px; margin: 0 auto; padding: 28px 20px 60px;
+  padding: 20px;
+  position: relative;
+  min-height: 0;
+}
+/* 背景模糊玻璃卡片 */
+.conn-card {
+  width: 100%;
+  max-width: 520px;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 32px 28px 28px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
 }
 .conn-header { margin-bottom: 28px; }
 .conn-logo { display: flex; align-items: center; gap: 12px; }

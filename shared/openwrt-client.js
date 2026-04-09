@@ -13,7 +13,8 @@ class OpenWrtClient {
     this.port     = config.port || 80;
     this.username = config.username || 'root';
     this.password = config.password || '';
-    this.https    = config.https || false;
+    this.https     = config.https || false;
+    this.ignoreSSL = config.ignoreSSL || false;
     this.timeout  = config.timeout || 8000;
     this.session  = null;
     this._reqId   = 1;
@@ -59,11 +60,13 @@ class OpenWrtClient {
       ? setTimeout(() => controller.abort(), options.timeout || this.timeout)
       : null;
 
+    // ignoreSSL: 忽略无效证书（用于自签名证书的 HTTPS 路由器）
+    // Electron 环境下通过 webPreferences.webSecurity:false 已处理
+    // Node.js 环境可通过 process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'
+    const fetchOpts = { ...options, signal: controller?.signal };
+
     try {
-      const resp = await this._fetcher(url, {
-        ...options,
-        signal: controller?.signal
-      });
+      const resp = await this._fetcher(url, fetchOpts);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return resp.json();
     } catch (err) {
@@ -181,16 +184,34 @@ class OpenWrtClient {
 
   // ─── DHCP 租约（连接设备列表）─────────────────────────
   async getDHCPLeases() {
+    // 方法1: luci-rpc（需要 luci-mod-rpc）
     try {
       const res = await this.call('luci-rpc', 'getDHCPLeases');
-      return res.leases || [];
-    } catch {
-      // 回退到读文件
-      try {
-        const f = await this.call('file', 'read', { path: '/tmp/dhcp.leases' });
-        return this._parseDHCPLeases(f.data || '');
-      } catch { return []; }
-    }
+      const leases = res.leases || res || [];
+      if (Array.isArray(leases) && leases.length > 0) {
+        return leases.map(d => ({
+          ip:       d['ipaddr'] || d['ip-addr'] || d.ip || '',
+          mac:      d['macaddr'] || d['mac-addr'] || d.mac || '',
+          hostname: d.hostname || d.name || '',
+        })).filter(d => d.ip);
+      }
+    } catch {}
+
+    // 方法2: 读 /tmp/dhcp.leases 文件
+    try {
+      const f = await this.call('file', 'read', { path: '/tmp/dhcp.leases' });
+      return this._parseDHCPLeases(f.data || '');
+    } catch {}
+
+    // 方法3: 通过 ubus network.interface 获取（不含 DHCP 详情，但能看到接入设备）
+    try {
+      const info = await this.getNetworkInfo();
+      return info
+        .filter(i => i.up && i.ipv4)
+        .map(i => ({ ip: i.ipv4, mac: '', hostname: i.name }));
+    } catch {}
+
+    return [];
   }
 
   // ─── UCI 配置读写 ──────────────────────────────────────
@@ -226,6 +247,33 @@ class OpenWrtClient {
 
   async execCommand(cmd, args = []) {
     return this.call('file', 'exec', { command: cmd, args });
+  }
+
+  // 检测路由器已安装的功能，用于动态菜单
+  async detectFeatures() {
+    const features = {
+      vpn: false, wireguard: false, docker: false,
+      adguard: false, passwall: false, clash: false
+    };
+    try {
+      // 检查各功能配置文件/包是否存在
+      const checks = [
+        ['cat', ['/etc/config/openvpn']],
+        ['cat', ['/etc/config/wireguard']],
+        ['which', ['dockerd']],
+        ['cat', ['/etc/config/adguardhome']],
+        ['cat', ['/etc/config/passwall']],
+        ['which', ['clash']],
+      ];
+      const keys = ['vpn', 'wireguard', 'docker', 'adguard', 'passwall', 'clash'];
+      const results = await Promise.allSettled(
+        checks.map(([cmd, args]) => this.execCommand(cmd, args))
+      );
+      results.forEach((r, i) => {
+        features[keys[i]] = r.status === 'fulfilled' && !!(r.value?.stdout || r.value?.code === 0);
+      });
+    } catch {}
+    return features;
   }
 
   // ─── 工具 ──────────────────────────────────────────────
@@ -383,6 +431,7 @@ class RouterManager {
       host:       config.host,
       port:       config.port || 80,
       https:      !!config.https,
+      ignoreSSL:  !!config.ignoreSSL,
       username:   config.username || 'root',
       password:   config.rememberPassword ? config.password : '',
       rememberPassword: !!config.rememberPassword,

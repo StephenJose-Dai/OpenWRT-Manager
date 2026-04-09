@@ -33,7 +33,7 @@ export function VPNPage({ client }) {
           <div style={{padding:'32px 0',textAlign:'center'}}>
             <p className="text-muted" style={{marginBottom:12}}>未检测到 OpenVPN 或 WireGuard 配置</p>
             <p style={{fontSize:13,color:'#555'}}>请通过 SSH 终端在路由器上安装并配置 VPN。</p>
-            <button className="btn-primary" style={{marginTop:16}} onClick={()=>window.location.href='/terminal'}>打开终端配置</button>
+            <button className="btn-primary" style={{marginTop:16}} onClick={()=>window.location.hash='#/terminal'}>打开终端配置</button>
           </div>
         ):(
           <div className="vpn-item">
