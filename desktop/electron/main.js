@@ -56,7 +56,8 @@ function getSmartGateways() {
 
   // ── 方法2：从活跃物理网卡推算（过滤虚拟网卡）────────
   // TAP(OpenVPN)/TUN(WireGuard) kept - users may scan VPN subnets
-  const virtualRE = /^(lo$|loopback|docker[0-9a-f]|veth[0-9a-f]|virbr[0-9]|br-[0-9a-f]|vlan[0-9]|bond[0-9]|dummy[0-9])/i
+  // 只过滤绝对不是路由器的虚拟接口（保留 tun/tap 供 VPN 用户使用）
+  const virtualRE = /^(lo$|lo0$|loopback|docker|veth[a-f0-9]+|virbr[0-9]|br-[a-f0-9]+|dummy[0-9]|npcap|npf)/i
   const ifaces = os.networkInterfaces()
   for (const [name, addrs] of Object.entries(ifaces)) {
     if (virtualRE.test(name)) continue
@@ -149,6 +150,11 @@ function createWindow() {
         request.end()
       })
     } catch { return null }
+  })
+
+  // F12 打开 DevTools（生产版本调试用）
+  mainWindow.webContents.on('before-input-event', (_, input) => {
+    if (input.key === 'F12') mainWindow.webContents.openDevTools({ mode: 'detach' })
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url: u }) => {

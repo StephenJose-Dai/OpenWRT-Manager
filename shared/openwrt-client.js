@@ -143,6 +143,8 @@ class OpenWrtClient {
   }
 
   // ─── 网络接口 ──────────────────────────────────────────
+  async getNetworkInterfaces() { return this.getNetworkInfo(); }  // alias
+
   async getNetworkInfo() {
     const status = await this.call('network.interface', 'dump');
     return (status.interface || []).map(iface => ({
@@ -296,7 +298,7 @@ class LANScanner {
           onFound?.(item);
         }
       }
-      if (found.length >= 5) break; // 找到足够多就停
+      // 继续扫描所有候选地址
     }
     return found;
   }
@@ -319,11 +321,18 @@ class LANScanner {
       }).finally(() => clearTimeout(timer));
 
       if (!resp.ok) return null;
-      const data = await resp.json();
-      // ubus 返回 6 (PERMISSION_DENIED) 说明路由器在线，只是密码不对
-      if (data.result?.[0] === 6 || data.result?.[0] === 0) {
-        return { reachable: true, requiresAuth: true };
-      }
+
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { return null; }
+
+      // ubus JSON-RPC 特征：result[0] 是错误码
+      // 0=成功 6=需要认证 → 确认是 OpenWrt/ubus 设备
+      const code = data.result?.[0];
+      if (code === 6) return { reachable: true, isOpenWrt: true };
+      if (code === 0) return { reachable: true, isOpenWrt: true };
+      // 有 jsonrpc 字段但 code 不是预期值，也认为是 ubus 设备
+      if (data.jsonrpc === '2.0' && data.id === 1) return { reachable: true, isOpenWrt: false };
       return null;
     } catch { return null; }
   }
@@ -373,6 +382,7 @@ class RouterManager {
       label:      config.label || config.host,
       host:       config.host,
       port:       config.port || 80,
+      https:      !!config.https,
       username:   config.username || 'root',
       password:   config.rememberPassword ? config.password : '',
       rememberPassword: !!config.rememberPassword,

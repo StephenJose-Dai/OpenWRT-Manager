@@ -489,9 +489,11 @@ export default function ConnectionManager({ onConnected }) {
   const [version,       setVersion]       = useState('');
   const [updateInfo,    setUpdateInfo]    = useState(null);
   const [checking,      setChecking]      = useState(false);
-  const [detectedGWs,   setDetectedGWs]   = useState([]);
+  const [allGWs,        setAllGWs]        = useState([]);   // 所有检测到的网关
+  const [selectedGWs,   setSelectedGWs]   = useState([]);   // 用户勾选的
   const [manualSubnet,  setManualSubnet]  = useState('');
   const [quickConnect,  setQuickConnect]  = useState(null); // { host }
+  const [gwLoading,     setGwLoading]     = useState(false);
 
   useEffect(() => {
     mgr.load().then(() => setRouters(mgr.listRouters()));
@@ -538,26 +540,43 @@ export default function ConnectionManager({ onConnected }) {
     } finally { setActiveId(null); }
   }, [onConnected]);
 
-  const startScan = useCallback(async () => {
-    setScanning(true); setFound([]); setDetectedGWs([]);
-    let hints = [];
+  // 加载本机网关列表（显示给用户选择）
+  const loadGateways = useCallback(async () => {
+    setGwLoading(true);
     try {
       const gwInfo = await window.electron?.getGateways?.();
-      if (gwInfo && gwInfo.all) {
-        hints = gwInfo.all;
-        setDetectedGWs(gwInfo.primary.length > 0 ? gwInfo.primary : gwInfo.all.slice(0, 2));
-      } else if (Array.isArray(gwInfo)) {
-        hints = gwInfo;
+      let gws = [];
+      if (gwInfo?.all)           gws = gwInfo.all;
+      else if (Array.isArray(gwInfo)) gws = gwInfo;
+      if (manualSubnet.trim()) {
+        const p = manualSubnet.trim().replace(/\/$/, '');
+        gws = [...new Set([p+'.1', p+'.254', ...gws])];
       }
-    } catch {}
-    if (manualSubnet.trim()) {
-      const prefix = manualSubnet.trim().replace(/\/$/, '');
-      hints = [prefix + '.1', prefix + '.254', ...hints];
+      setAllGWs(gws);
+      setSelectedGWs(gws);   // 默认全选
+    } catch { setAllGWs([]); setSelectedGWs([]); }
+    setGwLoading(false);
+  }, [manualSubnet]);
+
+  const startScan = useCallback(async () => {
+    let hints = selectedGWs.length > 0 ? [...selectedGWs] : [];
+    if (hints.length === 0) {
+      try {
+        const gwInfo = await window.electron?.getGateways?.();
+        if (gwInfo?.all) hints = gwInfo.all;
+        else if (Array.isArray(gwInfo)) hints = gwInfo;
+      } catch {}
+      if (manualSubnet.trim()) {
+        const p = manualSubnet.trim().replace(/\/$/, '');
+        hints = [...new Set([p+'.1', p+'.254', ...hints])];
+      }
     }
+    setScanning(true); setFound([]);
     scanner = new LANScanner(window.fetch.bind(window), 3000);
     await scanner.scan(item => setFound(f => [...f, item]), hints);
     setScanning(false);
-  }, [manualSubnet]);
+  }, [selectedGWs, manualSubnet]);
+
 
   // ── 渲染 ─────────────────────────────────────────────
   if (view === 'add') {
@@ -633,39 +652,72 @@ export default function ConnectionManager({ onConnected }) {
             </button>
           </div>
 
+          {/* 网关选择区 */}
           <div className="scan-config">
-            {detectedGWs.length > 0 && (
-              <div className="detected-gw">
-                <span className="detected-gw-label">检测到网关：</span>
-                {detectedGWs.map(gw => (
-                  <span key={gw} className="detected-gw-tag">{gw}</span>
-                ))}
-              </div>
-            )}
             <div className="manual-subnet-row">
-              <span className="manual-subnet-label">指定网段（可选）</span>
+              <span className="manual-subnet-label">指定网段</span>
               <input className="manual-subnet-input"
-                placeholder="如 192.168.123 或 10.8.0"
+                placeholder="如 192.168.123 或 10.8.0（可选）"
                 value={manualSubnet}
                 onChange={e => setManualSubnet(e.target.value)} />
+              <button
+                onClick={loadGateways}
+                disabled={gwLoading}
+                style={{flexShrink:0,padding:'5px 10px',background:'var(--bg3)',
+                  border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',
+                  fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
+                {gwLoading ? '检测中...' : '检测网关'}
+              </button>
             </div>
+            {allGWs.length > 0 && (
+              <div style={{marginTop:8}}>
+                <div style={{fontSize:11,color:'var(--muted)',marginBottom:5}}>
+                  选择要扫描的网关（全选或取消勾选不需要的）：
+                </div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+                  {allGWs.map(gw => {
+                    const checked = selectedGWs.includes(gw);
+                    return (
+                      <label key={gw}
+                        style={{display:'flex',alignItems:'center',gap:5,
+                          padding:'3px 9px',background: checked ? '#1f4a8f22' : 'var(--bg)',
+                          border:`1px solid ${checked ? '#4f8ef7' : 'var(--border)'}`,
+                          borderRadius:6,cursor:'pointer',fontSize:12,
+                          fontFamily:'monospace',color: checked ? '#4f8ef7' : 'var(--muted)'}}>
+                        <input type="checkbox" checked={checked} style={{margin:0,accentColor:'#4f8ef7'}}
+                          onChange={() => setSelectedGWs(prev =>
+                            checked ? prev.filter(x => x !== gw) : [...prev, gw]
+                          )} />
+                        {gw}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div style={{fontSize:11,color:'var(--dim)',marginTop:4}}>
+                  已选 {selectedGWs.length} / {allGWs.length} 个网关 · 点击开始扫描
+                </div>
+              </div>
+            )}
           </div>
 
           {scanning && (
             <div className="scan-progress">
               <div className="scan-wave" />
-              <p>正在探测路由器{detectedGWs.length > 0 ? `，优先检查 ${detectedGWs[0]}` : ''}...</p>
+              <p>正在探测 OpenWrt 路由器... 扫描 {selectedGWs.length} 个地址</p>
             </div>
           )}
 
-          {/* 扫描到的路由器 - 点击直接弹出连接弹窗 */}
+          {/* 扫描结果 */}
           {found.map(item => (
             <div key={item.host} className="found-card"
               onClick={() => setQuickConnect({ host: item.host })}>
               <div className="found-dot" />
               <div>
                 <strong>{item.host}</strong>
-                <span>OpenWrt 路由器 · 点击连接</span>
+                <span>
+                  {item.isOpenWrt ? '✓ OpenWrt 路由器' : '有响应的设备'}
+                  {' · 点击连接'}
+                </span>
               </div>
               <span style={{color:'#22c55e',fontSize:18}}>→</span>
             </div>
@@ -673,7 +725,9 @@ export default function ConnectionManager({ onConnected }) {
 
           {!scanning && found.length === 0 && (
             <div className="scan-empty">
-              点击"开始扫描"自动发现局域网路由器，或手动添加
+              {allGWs.length === 0
+                ? '点击"检测网关"获取本机网关，再点"开始扫描"'
+                : '未发现 OpenWrt 路由器，请检查路由器是否已配置 ubus_cors=1'}
             </div>
           )}
         </section>
