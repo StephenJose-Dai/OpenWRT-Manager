@@ -554,7 +554,7 @@ export default function ConnectionManager({ onConnected }) {
       const prefix = manualSubnet.trim().replace(/\/$/, '');
       hints = [prefix + '.1', prefix + '.254', ...hints];
     }
-    scanner = new LANScanner(window.fetch.bind(window), 1500);
+    scanner = new LANScanner(window.fetch.bind(window), 3000);
     await scanner.scan(item => setFound(f => [...f, item]), hints);
     setScanning(false);
   }, [manualSubnet]);

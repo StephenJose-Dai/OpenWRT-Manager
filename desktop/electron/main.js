@@ -55,7 +55,8 @@ function getSmartGateways() {
   } catch (e) {}
 
   // ── 方法2：从活跃物理网卡推算（过滤虚拟网卡）────────
-  const virtualRE = /^(lo|loopback|docker|veth|virbr|vmnet|vbox|utun\d|tun\d|tap\d|wsl|hyper|npcap|vlan|bond|br-|dummy)/i
+  // TAP(OpenVPN)/TUN(WireGuard) kept - users may scan VPN subnets
+  const virtualRE = /^(lo$|loopback|docker[0-9a-f]|veth[0-9a-f]|virbr[0-9]|br-[0-9a-f]|vlan[0-9]|bond[0-9]|dummy[0-9])/i
   const ifaces = os.networkInterfaces()
   for (const [name, addrs] of Object.entries(ifaces)) {
     if (virtualRE.test(name)) continue
@@ -187,6 +188,17 @@ function createTray() {
 app.whenReady().then(() => {
   // 完全移除 CSP：Electron 应用不需要 CSP，安全由主进程控制
   // CSP 会阻止连接任意 IP 的路由器，对 OpenWrt Manager 没有意义
+  // 跳过证书验证：允许连接自签名证书的路由器（内网 HTTPS 常见情况）
+  session.defaultSession.setCertificateVerifyProc((request, callback) => {
+    // 只对私有 IP 段跳过证书验证，公网域名仍然验证
+    const privateIP = /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)/
+    if (privateIP.test(request.hostname) || request.hostname === 'localhost') {
+      callback(0)  // 0 = OK，跳过验证
+    } else {
+      callback(-3) // -3 = 使用默认验证
+    }
+  })
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const headers = { ...details.responseHeaders }
     delete headers['content-security-policy']
