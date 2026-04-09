@@ -279,8 +279,8 @@ class LANScanner {
    *   2. 尝试 openwrt.lan / router.lan mDNS 域名
    *   3. 扫描当前子网的 .1 地址
    */
-  async scan(onFound) {
-    const candidates = this._buildCandidates();
+  async scan(onFound, gatewayHints = []) {
+    const candidates = this._buildCandidates(gatewayHints);
     const found = [];
 
     // 并发探测，每批 8 个
@@ -328,26 +328,18 @@ class LANScanner {
     } catch { return null; }
   }
 
-  _buildCandidates() {
+  _buildCandidates(hints = []) {
     const common = [
       '192.168.1.1', '192.168.0.1', '192.168.2.1', '192.168.3.1',
       '192.168.10.1', '192.168.11.1', '192.168.31.1', '192.168.100.1',
-      '10.0.0.1', '10.0.1.1', '172.16.0.1',
-      'openwrt.lan', 'router.lan', 'openwrt'
+      '192.168.50.1', '192.168.123.1', '192.168.178.1', '192.168.188.1',
+      '10.0.0.1', '10.0.1.1', '10.10.10.1', '172.16.0.1', '172.16.1.1',
+      'openwrt.lan', 'router.lan', 'openwrt', 'gateway.local',
     ];
 
-    // 尝试从当前页面 URL 推断子网（浏览器环境）
-    if (typeof window !== 'undefined') {
-      try {
-        const ip = window.location.hostname;
-        const parts = ip.split('.');
-        if (parts.length === 4) {
-          common.unshift(`${parts[0]}.${parts[1]}.${parts[2]}.1`);
-        }
-      } catch {}
-    }
-
-    return [...new Set(common)];
+    // 优先放传入的本机实际网关（来自 Electron net:getGateways）
+    const all = [...hints, ...common];
+    return [...new Set(all)];
   }
 }
 

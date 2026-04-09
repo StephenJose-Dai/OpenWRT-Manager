@@ -479,3 +479,97 @@ code { font-family: 'Cascadia Code','Consolas',monospace; font-size: 11px; backg
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+
+/* ── Modal ──────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; width: 420px; max-width: 92vw;
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+  animation: modal-in .15s ease;
+}
+@keyframes modal-in { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.modal-header h2 { font-size: 15px; font-weight: 600; margin: 0; }
+.modal-close {
+  background: none; border: none; color: var(--muted);
+  font-size: 16px; cursor: pointer; padding: 2px 6px; border-radius: 4px;
+}
+.modal-close:hover { background: var(--bg3); color: var(--text); }
+.modal-body { padding: 20px 24px 24px; text-align: center; }
+
+/* About */
+.about-logo { margin-bottom: 10px; }
+.about-name  { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.about-version { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.about-desc { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 16px; }
+.about-links { display: flex; flex-direction: column; gap: 8px; }
+.about-link-btn {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 14px; color: var(--text);
+  font-size: 13px; cursor: pointer; text-align: left; transition: all .15s;
+}
+.about-link-btn:hover { border-color: var(--blue); color: var(--blue); }
+.about-footer { font-size: 11px; color: var(--dim); margin-top: 16px; }
+
+/* Update */
+.update-current { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.update-checking{ font-size: 14px; color: var(--blue); }
+.update-msg     { font-size: 13px; color: var(--muted); }
+.update-ok      { font-size: 14px; color: var(--green); font-weight: 500; }
+.update-new     { text-align: left; }
+.update-new-tag { font-size: 15px; font-weight: 600; color: var(--green); margin-bottom: 8px; }
+.update-new-body{
+  font-size: 12px; color: var(--muted); background: var(--bg);
+  border-radius: 6px; padding: 10px; max-height: 120px; overflow-y: auto;
+  white-space: pre-wrap; margin-bottom: 4px; text-align: left;
+}
+
+/* Titlebar menu buttons */
+.titlebar-right { display: flex; align-items: center; gap: 2px; }
+.titlebar-menu-btn {
+  width: 26px; height: 22px; background: none; border: none;
+  border-radius: 4px; color: var(--muted); cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: background .15s;
+}
+.titlebar-menu-btn:hover { background: var(--bg3); color: var(--text); }
+.titlebar-ctrl-btn {
+  width: 26px; height: 22px; background: none; border: none;
+  border-radius: 4px; color: var(--muted); cursor: pointer;
+  font-size: 11px; transition: background .15s;
+}
+.titlebar-ctrl-btn:hover { background: var(--bg3); color: var(--text); }
+.titlebar-ctrl-btn.close:hover { background: var(--red); color: #fff; }
+
+/* ── 扫描配置区 ─────────────────────────────────────────── */
+.scan-config {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 14px;
+  margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;
+}
+.detected-gw { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.detected-gw-label { font-size: 11px; color: var(--muted); }
+.detected-gw-tag {
+  font-size: 11px; font-family: monospace;
+  background: #0e2a1e; color: var(--green);
+  border: 1px solid #1a4a30; border-radius: 4px;
+  padding: 2px 7px;
+}
+.manual-subnet-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.manual-subnet-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.manual-subnet-input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 5px 9px;
+  font-size: 12px; font-family: monospace;
+}
+.manual-subnet-input:focus { border-color: var(--blue); outline: none; }
+.manual-subnet-input::placeholder { color: var(--dim); }

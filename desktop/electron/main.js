@@ -1,17 +1,77 @@
 const {
   app, BrowserWindow, ipcMain, Tray, Menu,
-  nativeImage, shell, session
+  nativeImage, shell, session, autoUpdater, dialog
 } = require('electron')
 const path = require('path')
 const fs   = require('fs')
 const url  = require('url')
+const os   = require('os')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+const APP_VERSION = app.getVersion()
 let mainWindow, tray
 
 function getDistDir() {
   if (isDev) return null
   return path.join(process.resourcesPath, 'dist')
+}
+
+const { execSync } = require('child_process')
+
+// 智能获取路由器网关候选地址
+// 优先级：系统路由表默认路由 > 活跃物理网卡推算
+// 自动过滤：Docker/VPN/VMware/WSL 等虚拟网卡
+function getSmartGateways() {
+  const primary   = []   // 路由表直接读到的，最准确
+  const secondary = []   // 网卡推算的，备用
+
+  // ── 方法1：读系统路由表（最准确）──────────────────────
+  try {
+    let routeGWs = []
+    if (process.platform === 'win32') {
+      const out = execSync(
+        'powershell -NoProfile -Command ' +
+        '"Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | ' +
+        'Sort-Object -Property {[int]$_.RouteMetric} | ' +
+        'ForEach-Object { $_.NextHop } | ' +
+        'Where-Object { $_ -ne '0.0.0.0' -and $_ -ne '' }"',
+        { timeout: 5000, encoding: 'utf8' }
+      )
+      routeGWs = out.trim().split('\n')
+        .map(s => s.trim())
+        .filter(s => /^\d+\.\d+\.\d+\.\d+$/.test(s))
+    } else {
+      // Linux / macOS
+      const out = execSync(
+        'ip route show default 2>/dev/null || netstat -rn 2>/dev/null | grep "^0\\.0\\.0\\.0"',
+        { timeout: 2000, encoding: 'utf8', shell: true }
+      )
+      const ms = [...out.matchAll(/via\s+(\d+\.\d+\.\d+\.\d+)/g)]
+      routeGWs = ms.map(m => m[1]).filter(Boolean)
+    }
+    primary.push(...new Set(routeGWs))
+  } catch (e) {}
+
+  // ── 方法2：从活跃物理网卡推算（过滤虚拟网卡）────────
+  const virtualRE = /^(lo|loopback|docker|veth|virbr|vmnet|vbox|utun\d|tun\d|tap\d|wsl|hyper|npcap|vlan|bond|br-|dummy)/i
+  const ifaces = os.networkInterfaces()
+  for (const [name, addrs] of Object.entries(ifaces)) {
+    if (virtualRE.test(name)) continue
+    for (const a of addrs) {
+      if (a.family !== 'IPv4' || a.internal) continue
+      const subnet = a.address.split('.').slice(0, 3).join('.')
+      // 如果路由表里已有这个子网，跳过（避免重复）
+      if (primary.some(gw => gw.startsWith(subnet + '.'))) continue
+      secondary.push(subnet + '.1')
+      secondary.push(subnet + '.254')
+    }
+  }
+
+  return {
+    primary,                                         // 路由表直接读到
+    secondary: [...new Set(secondary)],             // 网卡推算
+    all: [...new Set([...primary, ...secondary])]   // 全部候选，primary 优先
+  }
 }
 
 function createWindow() {
@@ -26,93 +86,67 @@ function createWindow() {
       nodeIntegration:  false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: false,
+      webSecurity: false,  // 关闭 webSecurity，允许连接任意 HTTP 路由器
       sandbox: false,
-      // 生产环境也开启 DevTools，方便调试
-      devTools: true,
     },
     icon: path.join(__dirname, '../assets/icon.png')
   })
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show()
-    // 生产环境打开 DevTools（定位 JS 错误）
-    if (!isDev) {
-      mainWindow.webContents.openDevTools({ mode: 'detach' })
-    }
-  })
-
-  const logPath = path.join(app.getPath('userData'), 'debug.log')
-  const log = (msg) => {
-    const line = `[${new Date().toISOString()}] ${msg}\n`
-    fs.appendFileSync(logPath, line)
-    console.log(msg)
-  }
+  mainWindow.once('ready-to-show', () => mainWindow.show())
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
-    const distDir   = getDistDir()
-    const indexPath = path.join(distDir, 'index.html')
-    const indexUrl  = url.pathToFileURL(indexPath).href
-
-    log(`distDir: ${distDir}`)
-    log(`indexPath: ${indexPath}`)
-    log(`exists: ${fs.existsSync(indexPath)}`)
-    log(`indexUrl: ${indexUrl}`)
-
-    // 列出 dist/assets 内容
-    try {
-      const assets = fs.readdirSync(path.join(distDir, 'assets'))
-      log(`assets: ${assets.join(', ')}`)
-    } catch(e) {
-      log(`assets read error: ${e.message}`)
-    }
-
+    const indexUrl = url.pathToFileURL(
+      path.join(getDistDir(), 'index.html')
+    ).href
     mainWindow.loadURL(indexUrl)
-
-    mainWindow.webContents.on('did-fail-load', (_, code, desc, failUrl) => {
-      log(`FAIL code=${code} desc=${desc} url=${failUrl}`)
-    })
-
-    mainWindow.webContents.on('did-finish-load', () => {
-      log(`LOADED OK: ${indexUrl}`)
-      // 注入诊断脚本，捕获 JS 错误
-      mainWindow.webContents.executeJavaScript(`
-        window.onerror = function(msg, src, line, col, err) {
-          window.electron.sendError( msg + ' @ ' + src + ':' + line)
-        };
-        window.addEventListener('unhandledrejection', function(e) {
-          window.electron.sendError( 'Unhandled: ' + e.reason)
-        });
-        // 检查 root 元素
-        setTimeout(() => {
-          const root = document.getElementById('root');
-          window.electron.sendError( 
-            'root innerHTML length: ' + (root ? root.innerHTML.length : 'NO ROOT') +
-            ' | children: ' + (root ? root.children.length : 0)
-          );
-        }, 3000);
-        'injected'
-      `).then(r => log(`inject result: ${r}`)).catch(e => log(`inject error: ${e.message}`))
-    })
-
-    // 捕获渲染进程的 console 输出
-    mainWindow.webContents.on('console-message', (_, level, msg, line, src) => {
-      log(`CONSOLE[${level}] ${msg} @ ${src}:${line}`)
-    })
   }
 
-  ipcMain.on('js-error', (_, msg) => {
-    const logPath2 = path.join(app.getPath('userData'), 'debug.log')
-    fs.appendFileSync(logPath2, `[JS] ${msg}\n`)
-  })
-
+  // 窗口控制
+  ipcMain.handle('window:minimize', () => mainWindow?.minimize())
+  ipcMain.handle('window:maximize', () =>
+    mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
+  )
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
   ipcMain.on('window:maximize', () =>
     mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
   )
   ipcMain.on('window:close', () => mainWindow?.hide())
+
+  // 获取本机网关（用于智能扫描）
+  ipcMain.handle('net:getGateways', () => getSmartGateways())
+
+  // 获取 App 版本
+  ipcMain.handle('app:getVersion', () => APP_VERSION)
+
+  // 打开外部链接
+  ipcMain.on('shell:openExternal', (_, u) => shell.openExternal(u))
+
+  // 检查更新
+  ipcMain.handle('app:checkUpdate', async () => {
+    const { net } = require('electron')
+    try {
+      const request = net.request(
+        'https://api.github.com/repos/YOUR_USERNAME/openwrt-manager/releases/latest'
+      )
+      return new Promise((resolve) => {
+        let data = ''
+        request.on('response', (res) => {
+          res.on('data', c => { data += c })
+          res.on('end', () => {
+            try {
+              const json = JSON.parse(data)
+              resolve({ tag: json.tag_name, url: json.html_url, body: json.body })
+            } catch { resolve(null) }
+          })
+        })
+        request.on('error', () => resolve(null))
+        request.end()
+      })
+    } catch { return null }
+  })
 
   mainWindow.webContents.setWindowOpenHandler(({ url: u }) => {
     shell.openExternal(u)
@@ -120,8 +154,6 @@ function createWindow() {
   })
 
   mainWindow.webContents.on('render-process-gone', (_, details) => {
-    const logPath2 = path.join(app.getPath('userData'), 'debug.log')
-    fs.appendFileSync(logPath2, `[CRASH] ${details.reason}\n`)
     if (details.reason !== 'clean-exit') mainWindow.reload()
   })
 
@@ -139,9 +171,10 @@ function createTray() {
     tray = new Tray(icon)
     tray.setToolTip('OpenWrt Manager')
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: '显示窗口', click: () => mainWindow?.show() },
+      { label: '显示窗口',  click: () => mainWindow?.show() },
+      { label: '检查更新',  click: () => mainWindow?.webContents.send('trigger:checkUpdate') },
       { type: 'separator' },
-      { label: '退出', click: () => { app.isQuitting = true; app.quit() } }
+      { label: '退出',      click: () => { app.isQuitting = true; app.quit() } }
     ]))
     tray.on('double-click', () => mainWindow?.show())
   } catch (e) {
@@ -150,19 +183,15 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  // 完全移除 CSP：Electron 应用不需要 CSP，安全由主进程控制
+  // CSP 会阻止连接任意 IP 的路由器，对 OpenWrt Manager 没有意义
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' file: data: blob:;" +
-          "connect-src 'self' file: data: blob: " +
-          "http://192.168.0.0/16 http://10.0.0.0/8 http://172.16.0.0/12 " +
-          "ws: wss:;"
-        ]
-      }
-    })
+    const headers = { ...details.responseHeaders }
+    delete headers['content-security-policy']
+    delete headers['Content-Security-Policy']
+    callback({ responseHeaders: headers })
   })
+
   createWindow()
   createTray()
 })
