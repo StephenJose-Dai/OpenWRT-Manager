@@ -11,16 +11,13 @@ let mainWindow, tray
 
 function getDistDir() {
   if (isDev) return null
-  // extraResources 会被解压到 resources/ 目录（真实文件系统，不在 asar 内）
-  // process.resourcesPath = /path/to/resources
-  // dist/  = /path/to/resources/dist/
   return path.join(process.resourcesPath, 'dist')
 }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width:    1200, height:    780,
-    minWidth:  860, minHeight: 580,
+    width: 1200, height: 780,
+    minWidth: 860, minHeight: 580,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0d1117',
@@ -31,39 +28,85 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: false,
       sandbox: false,
+      // 生产环境也开启 DevTools，方便调试
+      devTools: true,
     },
     icon: path.join(__dirname, '../assets/icon.png')
   })
 
-  // 渲染完成后才显示，防止白屏/黑屏闪烁
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show()
+    // 生产环境打开 DevTools（定位 JS 错误）
+    if (!isDev) {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  const logPath = path.join(app.getPath('userData'), 'debug.log')
+  const log = (msg) => {
+    const line = `[${new Date().toISOString()}] ${msg}\n`
+    fs.appendFileSync(logPath, line)
+    console.log(msg)
+  }
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
     const distDir   = getDistDir()
     const indexPath = path.join(distDir, 'index.html')
+    const indexUrl  = url.pathToFileURL(indexPath).href
 
-    // 用 pathToFileURL 把真实文件系统路径转成 file:// URL
-    // 因为 dist/ 在 extraResources 里，是真实目录，pathToFileURL 完全有效
-    const indexUrl = url.pathToFileURL(indexPath).href
+    log(`distDir: ${distDir}`)
+    log(`indexPath: ${indexPath}`)
+    log(`exists: ${fs.existsSync(indexPath)}`)
+    log(`indexUrl: ${indexUrl}`)
+
+    // 列出 dist/assets 内容
+    try {
+      const assets = fs.readdirSync(path.join(distDir, 'assets'))
+      log(`assets: ${assets.join(', ')}`)
+    } catch(e) {
+      log(`assets read error: ${e.message}`)
+    }
+
     mainWindow.loadURL(indexUrl)
 
-    // 调试日志（发布版）：记录加载结果
     mainWindow.webContents.on('did-fail-load', (_, code, desc, failUrl) => {
-      const logPath = path.join(app.getPath('userData'), 'load-error.log')
-      const msg = `[${new Date().toISOString()}] FAIL code=${code} desc=${desc} url=${failUrl}\n` +
-                  `distDir=${distDir}\nindexPath=${indexPath}\nexists=${fs.existsSync(indexPath)}\n\n`
-      fs.appendFileSync(logPath, msg)
+      log(`FAIL code=${code} desc=${desc} url=${failUrl}`)
     })
 
     mainWindow.webContents.on('did-finish-load', () => {
-      const logPath = path.join(app.getPath('userData'), 'load-error.log')
-      const msg = `[${new Date().toISOString()}] SUCCESS loaded: ${indexUrl}\n`
-      fs.appendFileSync(logPath, msg)
+      log(`LOADED OK: ${indexUrl}`)
+      // 注入诊断脚本，捕获 JS 错误
+      mainWindow.webContents.executeJavaScript(`
+        window.onerror = function(msg, src, line, col, err) {
+          window.electron.sendError( msg + ' @ ' + src + ':' + line)
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+          window.electron.sendError( 'Unhandled: ' + e.reason)
+        });
+        // 检查 root 元素
+        setTimeout(() => {
+          const root = document.getElementById('root');
+          window.electron.sendError( 
+            'root innerHTML length: ' + (root ? root.innerHTML.length : 'NO ROOT') +
+            ' | children: ' + (root ? root.children.length : 0)
+          );
+        }, 3000);
+        'injected'
+      `).then(r => log(`inject result: ${r}`)).catch(e => log(`inject error: ${e.message}`))
+    })
+
+    // 捕获渲染进程的 console 输出
+    mainWindow.webContents.on('console-message', (_, level, msg, line, src) => {
+      log(`CONSOLE[${level}] ${msg} @ ${src}:${line}`)
     })
   }
+
+  ipcMain.on('js-error', (_, msg) => {
+    const logPath2 = path.join(app.getPath('userData'), 'debug.log')
+    fs.appendFileSync(logPath2, `[JS] ${msg}\n`)
+  })
 
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
   ipcMain.on('window:maximize', () =>
@@ -77,7 +120,8 @@ function createWindow() {
   })
 
   mainWindow.webContents.on('render-process-gone', (_, details) => {
-    console.error('Renderer crashed:', details.reason)
+    const logPath2 = path.join(app.getPath('userData'), 'debug.log')
+    fs.appendFileSync(logPath2, `[CRASH] ${details.reason}\n`)
     if (details.reason !== 'clean-exit') mainWindow.reload()
   })
 
@@ -106,7 +150,6 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
-  // CSP：允许连接局域网 HTTP 路由器
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -120,7 +163,6 @@ app.whenReady().then(() => {
       }
     })
   })
-
   createWindow()
   createTray()
 })

@@ -30,11 +30,7 @@ export default defineConfig({
       include: [/shared\//, /node_modules\//]
     },
     rollupOptions: {
-      external: [
-        '@xterm/xterm',
-        '@xterm/addon-fit',
-        '@xterm/xterm/css/xterm.css'
-      ],
+      // xterm bundled in (not external - no node_modules at runtime)
       input: { main: resolve(__dirname, 'index.html') },
       output: {
         manualChunks: {
@@ -54,7 +50,6 @@ export default defineConfig({
   },
 
   optimizeDeps: {
-    exclude: ['@xterm/xterm', '@xterm/addon-fit'],
     include: ['../shared/openwrt-client.js']
   },
 
