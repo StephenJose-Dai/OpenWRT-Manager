@@ -4,9 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!--
-    不在 HTML 里写 CSP meta — Electron 打包后用 file:// 协议加载，
-    crossorigin + file:// 会导致脚本加载失败（黑屏）。
-    CSP 由 main.js 的 session.webRequest 统一管理。
+    CSP 和安全策略由 electron/main.js 的 session.webRequest 统一管理。
+    打包后通过自定义 app:// 协议加载，彻底解决 file:// + ES module 的兼容问题。
   -->
   <title>OpenWrt Manager</title>
 </head>
