@@ -38,7 +38,6 @@
       "buildResources": "assets"
     },
     "files": [
-      "dist/**/*",
       "electron/**/*",
       "shared/**/*",
       "assets/**/*"
@@ -47,6 +46,10 @@
       {
         "from": "../shared",
         "to": "shared"
+      },
+      {
+        "from": "dist",
+        "to": "dist"
       }
     ],
     "win": {
