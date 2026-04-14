@@ -13,14 +13,20 @@ app.commandLine.appendSwitch('disable-http-cache', 'false')
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder')
 app.commandLine.appendSwitch('disable-frame-rate-limit')
 
-// ── 忽略 SSL 证书错误（允许连接 HTTPS 但证书无效的路由器）──
-app.commandLine.appendSwitch('ignore-certificate-errors')
-app.commandLine.appendSwitch('ignore-ssl-errors')
-
-// 还需要在 app 级别处理 certificate-error 事件
+// ── SSL 证书：按连接配置决定，不全局忽略 ──────────────
+// 用户在添加路由器时可开启"忽略SSL证书"，连接时通知主进程
+let currentIgnoreSSL = false  // 当前是否忽略 SSL
+ipcMain.on('ssl:setIgnore', (_, ignore) => {
+  currentIgnoreSSL = !!ignore
+})
+// app 级别处理 certificate-error：仅在用户主动开启忽略时才放行
 app.on('certificate-error', (event, webContents, certUrl, error, cert, callback) => {
-  event.preventDefault()
-  callback(true)  // true = 信任此证书
+  if (currentIgnoreSSL) {
+    event.preventDefault()
+    callback(true)   // 用户开启了忽略，放行
+  } else {
+    callback(false)  // 正常验证，拒绝
+  }
 })
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -97,10 +103,11 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: false,
       sandbox: false,
-      // 忽略 SSL 证书（让用户可以连接证书无效的 HTTPS 路由器）
-      allowRunningInsecureContent: true,
+      allowRunningInsecureContent: false,
     },
-    icon: path.join(__dirname, '../assets/icon.png')
+    icon: isDev
+      ? path.join(__dirname, '../assets/icon.png')
+      : path.join(process.resourcesPath, 'assets', 'icon.png')
   })
 
   mainWindow.once('ready-to-show', () => mainWindow.show())
@@ -210,20 +217,40 @@ function createWindow() {
 
 function createTray() {
   try {
-    const trayPath = path.join(__dirname, '../assets/tray.png')
-    const iconPath = path.join(__dirname, '../assets/icon.png')
+    // 优先用 extraResources 里的真实路径（不在 asar 虚拟文件系统内）
+    // 这样 nativeImage.createFromPath 在所有平台都能正确加载
+    const assetsDir = isDev
+      ? path.join(__dirname, '../assets')
+      : path.join(process.resourcesPath, 'assets')
+
+    const trayPath = path.join(assetsDir, 'tray.png')
+    const iconPath = path.join(assetsDir, 'icon.png')
     const usePath  = fs.existsSync(trayPath) ? trayPath : iconPath
-    const icon     = nativeImage.createFromPath(usePath).resize({ width: 16, height: 16 })
-    tray = new Tray(icon)
+
+    if (!fs.existsSync(usePath)) {
+      console.warn('托盘图标文件不存在:', usePath)
+      return
+    }
+
+    const icon = nativeImage.createFromPath(usePath)
+    // Windows 托盘图标需要小尺寸，macOS retina 需要原始尺寸
+    const trayIcon = process.platform === 'darwin'
+      ? icon
+      : icon.resize({ width: 16, height: 16 })
+
+    tray = new Tray(trayIcon)
     tray.setToolTip('OpenWrt Manager')
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: '显示窗口', click: () => mainWindow?.show() },
-      { label: '检查更新', click: () => mainWindow?.webContents.send('trigger:checkUpdate') },
+      { label: '显示窗口',  click: () => mainWindow?.show() },
+      { label: '检查更新',  click: () => mainWindow?.webContents.send('trigger:checkUpdate') },
       { type: 'separator' },
       { label: '退出', click: () => { app.isQuitting = true; app.quit() } }
     ]))
     tray.on('double-click', () => mainWindow?.show())
-  } catch (e) { console.warn('托盘初始化失败:', e.message) }
+    console.log('托盘图标创建成功:', usePath)
+  } catch (e) {
+    console.warn('托盘初始化失败:', e.message)
+  }
 }
 
 app.whenReady().then(() => {
@@ -235,13 +262,9 @@ app.whenReady().then(() => {
     callback({ responseHeaders: headers })
   })
   // ── 启动性能优化 ──────────────────────────────────────
-  app.commandLine.appendSwitch('disable-renderer-backgrounding')     // 防止后台节流
-  app.commandLine.appendSwitch('disable-background-timer-throttling') // 防止定时器节流
-  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows') // 遮挡时不节流
-  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256')   // 限制内存
-
-  // 忽略证书错误（支持自签名 HTTPS 路由器）
-  app.commandLine.appendSwitch('ignore-certificate-errors')
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+  app.commandLine.appendSwitch('disable-background-timer-throttling')
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 
   createWindow()
   createTray()

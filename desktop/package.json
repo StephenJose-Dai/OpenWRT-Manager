@@ -50,6 +50,10 @@
       {
         "from": "dist",
         "to": "dist"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
       }
     ],
     "win": {

@@ -243,6 +243,7 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
   const [errors,      setErrors]      = useState({})
   const [saving,      setSaving]      = useState(false)
   const [showPwd,     setShowPwd]     = useState(false)
+  const [ignoreSSL,   setIgnoreSSL]   = useState(false)
 
   const handleProto = p => { setProto(p); setPort(p==='https'?443:80) }
 
@@ -262,6 +263,7 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
   const testConnect = async () => {
     if (!host) { setErrors(e=>({...e,host:'请填写地址'})); return }
     setTesting(true); setTestResult('')
+    window.electron?.setSSLIgnore?.(ignoreSSL)
     try {
       const c = new OpenWrtClient({host,port:+port,https:proto==='https',username,password,fetcher:window.fetch.bind(window)})
       await c.login(); setTestResult('ok')
@@ -279,6 +281,7 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
     setErrors(errs)
     if (Object.keys(errs).length) return
     setSaving(true)
+    window.electron?.setSSLIgnore?.(ignoreSSL)
     try {
       const c = new OpenWrtClient({host,port:+port,https:proto==='https',username,password,fetcher:window.fetch.bind(window)})
       await c.login()
@@ -312,6 +315,23 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
           </span>
           {errors.host && <span className="err-msg">{errors.host}</span>}
         </label>
+
+        {proto === 'https' && (
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+            background:'#161d2a',border:'1px solid #2a3548',borderRadius:8,
+            padding:'10px 14px',marginBottom:2}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500}}>忽略 SSL 证书错误</div>
+              <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>使用自签名证书或证书已过期时开启</div>
+            </div>
+            <label style={{position:'relative',display:'inline-block',width:40,height:22,cursor:'pointer',flexShrink:0,marginLeft:14}}>
+              <input type="checkbox" checked={ignoreSSL} onChange={e=>setIgnoreSSL(e.target.checked)} style={{opacity:0,width:0,height:0}}/>
+              <span style={{position:'absolute',inset:0,borderRadius:11,background:ignoreSSL?'#f59e0b':'#30363d',transition:'.25s'}}>
+                <span style={{position:'absolute',width:16,height:16,borderRadius:'50%',background:'#fff',top:3,left:ignoreSSL?21:3,transition:'.25s'}}/>
+              </span>
+            </label>
+          </div>
+        )}
         <label><span>用户名</span><input value={username} onChange={e=>setUsername(e.target.value)}/></label>
         <label className={errors.password?'error':''}>
           <span>密码 <em>*</em></span>
@@ -404,7 +424,9 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
     setActiveId(id); setError('')
     try {
       const cfg    = mgr.getConfig(id)
-      const client = new OpenWrtClient({...cfg, password, https:cfg.https||false, fetcher:window.fetch.bind(window)})
+      // 通知主进程该连接是否需要忽略 SSL 证书
+      window.electron?.setSSLIgnore?.(cfg.ignoreSSL || false)
+      const client = new OpenWrtClient({...cfg, password, https:cfg.https||false, ignoreSSL:cfg.ignoreSSL||false, fetcher:window.fetch.bind(window)})
       await client.login()
       onConnected({ client, config:{...cfg, password}, manager:mgr })
     } catch(e) { setError(e.message||'连接失败') }
