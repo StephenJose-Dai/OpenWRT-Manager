@@ -270,8 +270,11 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
       await c.login(); setTestResult('ok')
     } catch(e) { setTestResult('fail:' + (() => {
         const m = e.message||'连接失败';
-        if (m.includes('fetch')||m.includes('Failed')) return '无法访问路由器。请确认：① IP端口正确 ② 路由器执行过 uci set uhttpd.main.ubus_cors=1 && uci commit uhttpd && /etc/init.d/uhttpd restart';
-        if (m.includes('超时')||m.includes('abort')) return '连接超时，请检查IP和端口';
+        if (m.includes('TIMED_OUT')||m.includes('timed out')||m.includes('超时')||m.includes('abort')) {
+          return proto==='https' ? '连接超时。请确认路由器已开启 HTTPS，或尝试改用 HTTP:80' : '连接超时，请检查IP和端口是否正确';
+        }
+        if (m.includes('CERT')||m.includes('certificate')||m.includes('SSL')) return 'SSL 证书错误，请开启"忽略 SSL 证书错误"开关';
+        if (m.includes('fetch')||m.includes('Failed')) return '无法访问路由器。请确认 IP 和端口正确';
         return m;
       })()) }
     setTesting(false)
@@ -492,10 +495,13 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
       hints = [...new Set([p+'.1', p+'.254', ...hints])]
     }
 
+    // 加上已保存路由器的 IP（最准确）
+    const savedIPs = mgr.listRouters().map(r => r.host).filter(Boolean)
+
     // 加上常见默认地址兜底
     const defaults = ['192.168.1.1','192.168.0.1','192.168.31.1','192.168.100.1',
                       '10.0.0.1','10.0.1.1','172.16.0.1','172.16.1.1']
-    hints = [...new Set([...hints, ...defaults])]
+    hints = [...new Set([...savedIPs, ...hints, ...defaults])]
 
     // 用主进程代理探测（绕过 CORS），每批 8 个并发
     const batchSize = 8

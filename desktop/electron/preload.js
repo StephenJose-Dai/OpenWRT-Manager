@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld('electron', {
   setSSLIgnore:  (ignore) => ipcRenderer.send('ssl:setIgnore', !!ignore),
 
   // ubus 代理请求（主进程转发，绕过 CORS）
-  ubusRequest: (url, body) => ipcRenderer.invoke('ubus:request', { url, body }),
+  ubusRequest: (url, body, ignoreSSL) => ipcRenderer.invoke('ubus:request', { url, body, ignoreSSL }),
   // 扫描探测（主进程探测，绕过 CORS）
   ubusProbe: (host) => ipcRenderer.invoke('ubus:probe', { host }),
 })

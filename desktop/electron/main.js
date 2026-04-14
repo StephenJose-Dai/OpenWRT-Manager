@@ -44,18 +44,27 @@ function getSmartGateways() {
 
   try {
     if (process.platform === 'win32') {
-      const ps = [
-        'powershell -NoProfile -Command',
-        '"Get-NetRoute -DestinationPrefix 0.0.0.0/0 -ErrorAction SilentlyContinue',
-        '| Sort-Object RouteMetric',
-        '| ForEach-Object { $_.NextHop }',
-        '| Where-Object { $_ -ne \\"0.0.0.0\\" }"'
-      ].join(' ')
-      const out = execSync(ps, { timeout: 5000, encoding: 'utf8' })
-      primary.push(...out.trim().split('\n')
-        .map(s => s.trim())
-        .filter(s => /^\d+\.\d+\.\d+\.\d+$/.test(s)))
+      // 方法1: route print（最可靠）
+      try {
+        const out = execSync('route print 0.0.0.0', { timeout: 3000, encoding: 'utf8' })
+        for (const line of out.split('\n')) {
+          const m = line.match(/^\s*0\.0\.0\.0\s+0\.0\.0\.0\s+(\d+\.\d+\.\d+\.\d+)/)
+          if (m && m[1] !== '0.0.0.0') primary.push(m[1])
+        }
+      } catch {}
+      // 方法2: ipconfig（备用）
+      if (primary.length === 0) {
+        try {
+          const out = execSync('ipconfig', { timeout: 3000, encoding: 'utf8' })
+          const ms = [...out.matchAll(/(?:默认网关|Default Gateway)[\s.:：]+([\d.]+)/gi)]
+          ms.forEach(m => {
+            const g = m[1]
+            if (g && g !== '0.0.0.0' && /\d+\.\d+\.\d+\.\d+/.test(g)) primary.push(g)
+          })
+        } catch {}
+      }
     } else {
+      // Linux/macOS
       const out = execSync('ip route show default 2>/dev/null || route -n 2>/dev/null', {
         timeout: 2000, encoding: 'utf8', shell: true
       })
@@ -69,10 +78,11 @@ function getSmartGateways() {
     if (skipRE.test(name)) continue
     for (const a of addrs) {
       if (a.family !== 'IPv4' || a.internal) continue
-      const sub = a.address.split('.').slice(0,3).join('.')
+      const sub = a.address.split('.').slice(0, 3).join('.')
       secondary.push(sub + '.1', sub + '.254')
     }
   }
+
   const uniq = arr => [...new Set(arr)]
   return {
     primary:   uniq(primary),
@@ -173,16 +183,24 @@ function createTray() {
 // ── IPC 处理器（统一注册，避免重复） ──────────────────────
 function registerIPC() {
   // ubus 代理：主进程转发所有路由器请求，完全绕过 CORS 限制
-  ipcMain.handle('ubus:request', async (_, { url, body }) => {
+  ipcMain.handle('ubus:request', async (_, { url, body, ignoreSSL: reqIgnoreSSL }) => {
+    // 临时切换 SSL 忽略状态（用于这次请求）
+    const prevIgnoreSSL = currentIgnoreSSL
+    if (reqIgnoreSSL !== undefined) {
+      currentIgnoreSSL = !!reqIgnoreSSL
+      // 更新 session 证书验证策略
+      session.defaultSession.setCertificateVerifyProc((req2, cb) => {
+        cb(currentIgnoreSSL ? 0 : -3)
+      })
+    }
+
     return new Promise((resolve, reject) => {
       try {
-        // 使用当前 ignoreSSL 状态决定是否跳过证书验证
-        const reqOptions = {
+        const req = net.request({
           method: 'POST',
           url: url,
           redirect: 'follow'
-        }
-        const req = net.request(reqOptions)
+        })
         req.setHeader('Content-Type', 'application/json')
         req.setHeader('Accept', 'application/json')
 
@@ -196,6 +214,13 @@ function registerIPC() {
             if (statusCode < 200 || statusCode >= 300) {
               reject(new Error('HTTP ' + statusCode))
               return
+            }
+            // 恢复 SSL 状态
+            if (reqIgnoreSSL !== undefined && prevIgnoreSSL !== currentIgnoreSSL) {
+              currentIgnoreSSL = prevIgnoreSSL
+              session.defaultSession.setCertificateVerifyProc((req2, cb) => {
+                cb(currentIgnoreSSL ? 0 : -3)
+              })
             }
             try {
               resolve(JSON.parse(responseData))
@@ -266,7 +291,11 @@ function registerIPC() {
     return results.find(r => r !== null) || null
   })
 
-  ipcMain.handle('net:getGateways', () => getSmartGateways())
+  ipcMain.handle('net:getGateways', () => {
+    const gw = getSmartGateways()
+    console.log('[getGateways] result:', JSON.stringify(gw))
+    return gw
+  })
   ipcMain.handle('app:getVersion',  () => APP_VERSION)
   ipcMain.handle('shell:openExternal', (_, u) => u && shell.openExternal(u))
   ipcMain.on(    'shell:openExternal', (_, u) => u && shell.openExternal(u))

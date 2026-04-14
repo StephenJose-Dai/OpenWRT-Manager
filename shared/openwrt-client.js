@@ -66,8 +66,8 @@ class OpenWrtClient {
     // Electron 环境：通过主进程代理，完全绕过 CORS 限制
     if (typeof window !== 'undefined' && window.electron?.ubusRequest) {
       try {
-        const data = await window.electron.ubusRequest(url, body);
-        console.log('[ubus-proxy] OK:', url.split('/').pop(), JSON.stringify(data).slice(0,100));
+        // 把 ignoreSSL 传给主进程，让它在发请求前设置证书验证
+        const data = await window.electron.ubusRequest(url, body, this.ignoreSSL);
         return data;
       } catch (err) {
         console.error('[ubus-proxy] FAIL:', url, err.message);
