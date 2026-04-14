@@ -268,7 +268,12 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
     try {
       const c = new OpenWrtClient({host,port:+port,https:proto==='https',username,password,fetcher:window.fetch.bind(window)})
       await c.login(); setTestResult('ok')
-    } catch(e) { setTestResult('fail:'+(e.message||'连接失败')) }
+    } catch(e) { setTestResult('fail:' + (() => {
+        const m = e.message||'连接失败';
+        if (m.includes('fetch')||m.includes('Failed')) return '无法访问路由器。请确认：① IP端口正确 ② 路由器执行过 uci set uhttpd.main.ubus_cors=1 && uci commit uhttpd && /etc/init.d/uhttpd restart';
+        if (m.includes('超时')||m.includes('abort')) return '连接超时，请检查IP和端口';
+        return m;
+      })()) }
     setTesting(false)
   }
 
@@ -368,6 +373,18 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
             <input type="checkbox" checked={autoLogin} onChange={e=>setAutoLogin(e.target.checked)} disabled={!rememberPwd}/>自动登录 <em>（下次打开自动连接）</em>
           </label>
         </div>
+        <details style={{marginBottom:8,background:'#161b22',border:'1px solid #21262d',borderRadius:8,padding:'8px 12px',fontSize:12,color:'#8b949e'}}>
+          <summary style={{cursor:'pointer',color:'#58a6ff',userSelect:'none',listStyle:'none',display:'flex',alignItems:'center',gap:6}}>⚙ 连不上？点此查看路由器端必要配置</summary>
+          <div style={{marginTop:8,lineHeight:1.8,fontFamily:'monospace',fontSize:11}}>
+            <div style={{color:'#f0883e',marginBottom:4}}>在路由器 SSH 或 LuCI 终端执行：</div>
+            <div style={{background:'#0d1117',padding:'8px 10px',borderRadius:6,marginBottom:8,color:'#7ee787'}}>
+              opkg update && opkg install rpcd-mod-file luci-mod-rpc<br/>
+              uci set uhttpd.main.ubus_cors=1 && uci commit uhttpd<br/>
+              /etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+            </div>
+            <div>① rpcd-mod-file：终端执行权限 ② luci-mod-rpc：设备列表 ③ ubus_cors=1：允许跨域（必须）</div>
+          </div>
+        </details>
         <div className="form-btns">
           <button className="btn-cancel" onClick={onCancel}>取消</button>
           <button className="btn-save" onClick={save} disabled={saving}>{saving?'连接中...':'保存并连接'}</button>

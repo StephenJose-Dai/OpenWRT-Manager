@@ -15,7 +15,7 @@ class OpenWrtClient {
     this.password = config.password || '';
     this.https     = config.https || false;
     this.ignoreSSL = config.ignoreSSL || false;
-    this.timeout  = config.timeout || 8000;
+    this.timeout  = config.timeout || 15000;
     this.session  = null;
     this._reqId   = 1;
 
@@ -44,11 +44,18 @@ class OpenWrtClient {
 
     const data = typeof res === 'string' ? JSON.parse(res) : res;
 
+    // ubus 错误响应
+    if (data.error) throw new Error(data.error.message || `RPC 错误 ${data.error.code}`);
+
     // ubus 结果：[status_code, data_object]
-    if (!data.result) throw new Error('无效的 RPC 响应');
+    if (!Array.isArray(data.result)) {
+      // 某些 OpenWrt 版本直接返回 result 对象而不是数组
+      if (data.result && typeof data.result === 'object') return data.result;
+      throw new Error('无效的 RPC 响应：' + JSON.stringify(data).slice(0, 100));
+    }
     const [code, result] = data.result;
     if (code !== 0) throw new OpenWrtError(code, ubusCodes[code] || `ubus 错误 ${code}`);
-    return result;
+    return result || {};
   }
 
   // 平台无关的 HTTP 请求（子类可覆盖）
@@ -405,51 +412,45 @@ class LANScanner {
   }
 
   async _probe(host) {
-    // 尝试多个端口：80 (默认), 443 (HTTPS), 8080, 8443
+    // 并行探测常用端口，哪个先响应用哪个
     const attempts = [
-      { url: `http://${host}/ubus`,  https: false },
-      { url: `http://${host}:8080/ubus`, https: false },
-      { url: `https://${host}/ubus`, https: true  },
-      { url: `https://${host}:8443/ubus`, https: true },
+      { url: `http://${host}/ubus`,      https: false, port: 80   },
+      { url: `http://${host}:8080/ubus`, https: false, port: 8080 },
+      { url: `https://${host}/ubus`,     https: true,  port: 443  },
     ];
 
-    for (const { url, https } of attempts) {
-      try {
-        const ctrl  = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), this._timeout);
+    const body = JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'call',
+      params: ['00000000000000000000000000000000', 'session', 'login',
+               { username: '', password: '' }]
+    });
 
+    // 并行发请求，取第一个成功的
+    const tryOne = async ({ url, https, port }) => {
+      const ctrl  = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), this._timeout);
+      try {
         const resp = await this._fetcher(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0', id: 1, method: 'call',
-            params: ['00000000000000000000000000000000', 'session', 'login',
-                     { username: '', password: '' }]
-          }),
+          body,
           signal: ctrl.signal
-        }).finally(() => clearTimeout(timer));
-
-        if (!resp.ok) continue;
-
+        });
+        clearTimeout(timer);
+        if (!resp.ok) return null;
         const text = await resp.text();
-        let data;
-        try { data = JSON.parse(text); } catch { continue; }
-
+        let data; try { data = JSON.parse(text); } catch { return null; }
         const code = data.result?.[0];
-        if (code === 6 || code === 0) {
-          // 提取实际端口
-          const m = url.match(/:(\d+)\//);
-          const port = m ? +m[1] : (https ? 443 : 80);
-          return { reachable: true, isOpenWrt: true, https, port };
+        if (code === 6 || code === 0 || (data.jsonrpc === '2.0' && data.id === 1)) {
+          return { reachable: true, isOpenWrt: code === 6 || code === 0, https, port };
         }
-        if (data.jsonrpc === '2.0' && data.id === 1) {
-          const m = url.match(/:(\d+)\//);
-          const port = m ? +m[1] : (https ? 443 : 80);
-          return { reachable: true, isOpenWrt: false, https, port };
-        }
-      } catch { /* 超时或网络错误，尝试下一个端口 */ }
-    }
-    return null;
+        return null;
+      } catch { clearTimeout(timer); return null; }
+    };
+
+    // 并行尝试，返回第一个非 null 结果
+    const results = await Promise.all(attempts.map(tryOne));
+    return results.find(r => r !== null) || null;
   }
 
   _buildCandidates(hints = []) {
