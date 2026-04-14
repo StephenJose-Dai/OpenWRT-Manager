@@ -172,6 +172,58 @@ function createTray() {
 
 // ── IPC 处理器（统一注册，避免重复） ──────────────────────
 function registerIPC() {
+  // ubus 代理：主进程转发所有路由器请求，完全绕过 CORS 限制
+  // 渲染进程的 Chromium fetch 受 CORS 限制，主进程的 net.request 不受限制
+  ipcMain.handle('ubus:request', async (_, { url, body }) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const req = net.request({
+          method: 'POST',
+          url: url,
+          redirect: 'follow'
+        })
+        req.setHeader('Content-Type', 'application/json')
+        req.setHeader('Accept', 'application/json')
+
+        let responseData = ''
+        let statusCode = 200
+
+        req.on('response', (res) => {
+          statusCode = res.statusCode
+          res.on('data', (chunk) => { responseData += chunk.toString() })
+          res.on('end', () => {
+            if (statusCode < 200 || statusCode >= 300) {
+              reject(new Error('HTTP ' + statusCode))
+              return
+            }
+            try {
+              resolve(JSON.parse(responseData))
+            } catch (e) {
+              reject(new Error('JSON parse error: ' + responseData.slice(0, 100)))
+            }
+          })
+        })
+
+        req.on('error', (err) => {
+          reject(new Error(err.message || 'Network error'))
+        })
+
+        // 设置超时
+        const timer = setTimeout(() => {
+          req.abort()
+          reject(new Error('连接超时'))
+        }, 15000)
+
+        req.on('response', () => clearTimeout(timer))
+
+        req.write(body)
+        req.end()
+      } catch (err) {
+        reject(err)
+      }
+    })
+  })
+
   ipcMain.handle('net:getGateways', () => getSmartGateways())
   ipcMain.handle('app:getVersion',  () => APP_VERSION)
   ipcMain.handle('shell:openExternal', (_, u) => u && shell.openExternal(u))

@@ -42,7 +42,7 @@ class OpenWrtClient {
       timeout: this.timeout
     });
 
-    const data = typeof res === 'string' ? JSON.parse(res) : res;
+    const data = res;  // _request 已经返回解析好的对象
 
     // ubus 错误响应
     if (data.error) throw new Error(data.error.message || `RPC 错误 ${data.error.code}`);
@@ -58,24 +58,35 @@ class OpenWrtClient {
     return result || {};
   }
 
-  // 平台无关的 HTTP 请求（子类可覆盖）
+  // 平台无关的 HTTP 请求
+  // 优先使用 Electron 主进程代理（绕过 CORS），否则使用 fetch
   async _request(url, options) {
-    if (!this._fetcher) throw new Error('未提供 fetcher，请在构造时传入 config.fetcher');
+    const body = options.body || '';
+
+    // Electron 环境：通过主进程代理，完全绕过 CORS 限制
+    if (typeof window !== 'undefined' && window.electron?.ubusRequest) {
+      try {
+        const data = await window.electron.ubusRequest(url, body);
+        console.log('[ubus-proxy] OK:', url.split('/').pop(), JSON.stringify(data).slice(0,100));
+        return data;
+      } catch (err) {
+        console.error('[ubus-proxy] FAIL:', url, err.message);
+        throw err;
+      }
+    }
+
+    // 非 Electron 环境（开发 / 小程序 / 移动端）：使用注入的 fetcher
+    if (!this._fetcher) throw new Error('未提供 fetcher');
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller
       ? setTimeout(() => controller.abort(), options.timeout || this.timeout)
       : null;
 
-    // ignoreSSL: 忽略无效证书（用于自签名证书的 HTTPS 路由器）
-    // Electron 环境下通过 webPreferences.webSecurity:false 已处理
-    // Node.js 环境可通过 process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'
-    const fetchOpts = { ...options, signal: controller?.signal };
-
     try {
-      const resp = await this._fetcher(url, fetchOpts);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      return resp.json();
+      const resp = await this._fetcher(url, { ...options, signal: controller?.signal });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return await resp.json();
     } catch (err) {
       if (err.name === 'AbortError') throw new Error('连接超时');
       throw err;
@@ -310,19 +321,38 @@ class OpenWrtClient {
     return this.call('file', 'exec', { command: cmd, args });
   }
 
-  // 带完整路径的命令执行（避免 PATH 问题）
+  // 带路径探测的命令执行
+  // rpcd-mod-file 的 exec 需要完整路径，且必须在 ACL 里
+  // 使用 sh -c 方式绕过路径问题
   async execCommandFull(cmd, args = []) {
-    // 常见命令的完整路径映射
-    const pathMap = {
-      'ls': '/bin/ls', 'cat': '/bin/cat', 'echo': '/bin/echo',
-      'ps': '/bin/ps', 'top': '/usr/bin/top',
-      'iptables': '/usr/sbin/iptables', 'ip': '/sbin/ip',
-      'uci': '/sbin/uci', 'opkg': '/bin/opkg',
-      'wifi': '/sbin/wifi', 'ifconfig': '/sbin/ifconfig',
-      'logread': '/sbin/logread', 'dmesg': '/bin/dmesg',
-    };
-    const fullCmd = pathMap[cmd] || cmd;
-    return this.call('file', 'exec', { command: fullCmd, args });
+    // 方法1：用 sh -c 执行（sh 的路径固定在 /bin/sh）
+    const shellCmd = [cmd, ...args].join(' ')
+    try {
+      const r = await this.call('file', 'exec', {
+        command: '/bin/sh',
+        args: ['-c', shellCmd]
+      })
+      return r
+    } catch(e1) {
+      // 如果 /bin/sh 不在 ACL，尝试常见路径
+      const searchPaths = [
+        '/bin', '/usr/bin', '/sbin', '/usr/sbin',
+        '/usr/local/bin', '/usr/local/sbin'
+      ]
+      for (const dir of searchPaths) {
+        try {
+          const r = await this.call('file', 'exec', {
+            command: dir + '/' + cmd,
+            args
+          })
+          return r
+        } catch(e2) {
+          if (e2.message?.includes('PERMISSION_DENIED')) throw e2
+          // NOT_FOUND: 继续试下一个路径
+        }
+      }
+      throw e1
+    }
   }
 
   // 检测路由器已安装的功能，用于动态菜单

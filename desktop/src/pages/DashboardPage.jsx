@@ -30,6 +30,7 @@ export default function DashboardPage({ client }) {
       const sysInfo = await client.getSystemInfo()
       setInfo(sysInfo)
     } catch(e) {
+      console.error('[Dashboard] getSystemInfo error:', e.message, e.stack)
       setError(e.message || '获取系统信息失败')
     }
     setLoading(false)
