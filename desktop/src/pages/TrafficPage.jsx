@@ -67,9 +67,10 @@ export function TrafficPage({ client }) {
               <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={.4}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/></linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08"/>
-            <XAxis dataKey="ts" hide/>
+            <XAxis dataKey="ts" hide tickFormatter={v => new Date(v).toLocaleTimeString()}/>
             <YAxis tickFormatter={v=>v+'K'} width={50} tick={{fontSize:11}}/>
-            <Tooltip formatter={(v,n)=>[`${v} KB/s`,n==='rx'?'↓下行':'↑上行']}/>
+            <Tooltip
+              labelFormatter={v => new Date(v).toLocaleTimeString()} formatter={(v,n)=>[`${v} KB/s`,n==='rx'?'↓下行':'↑上行']}/>
             <Legend formatter={v=>v==='rx'?'↓下行':'↑上行'}/>
             <Area type="monotone" dataKey="rx" stroke="#4f8ef7" fill="url(#rg)" strokeWidth={2} dot={false} name="rx"/>
             <Area type="monotone" dataKey="tx" stroke="#22c55e" fill="url(#tg)" strokeWidth={2} dot={false} name="tx"/>

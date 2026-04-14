@@ -121,7 +121,7 @@ export default function SystemPage({ client }) {
                 <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>Windows 登录时自动启动（写入注册表 HKCU\Run）</div>
               </div>
             </label>
-            {autoMsg && <div style={{marginTop:8,fontSize:12,color:autoMsg.startsWith('✅')?'var(--green)':'var(--red)'}}>{autoMsg}</div>}
+            {autoStartMsg && <div style={{marginTop:8,fontSize:12,color:autoStartMsg.startsWith('✓')?'var(--green)':'var(--red)'}}>{autoStartMsg}</div>}
           </div>
         </>
       )}

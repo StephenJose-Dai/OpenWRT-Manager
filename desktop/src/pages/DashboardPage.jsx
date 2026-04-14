@@ -59,7 +59,7 @@ export default function DashboardPage({ client }) {
 
   const stats = info ? [
     { label: 'CPU 负载',  value: info.load?.[0] ?? '--',    sub: `5m: ${info.load?.[1] ?? '--'}`, color: '#4f8ef7' },
-    { label: '内存使用',  value: `${info.memory?.usagePct ?? 0}%`, sub: fmtBytes((info.memory?.used || 0) * 1024), color: '#7c5af7' },
+    { label: '内存使用',  value: `${info.memory?.usagePct ?? 0}%`, sub: fmtBytes(info.memory?.used || 0), color: '#7c5af7' },
     { label: '运行时间',  value: info.uptimeFmt?.split(' ')?.[0] ?? '--', sub: info.uptimeFmt ?? '--', color: '#f59e0b' },
     { label: '系统版本',  value: (info.release || '--').substring(0, 14), sub: info.hostname ?? '--', color: '#22c55e' },
   ] : []

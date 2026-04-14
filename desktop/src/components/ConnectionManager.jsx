@@ -128,7 +128,7 @@ function TitleBar({ version, onAbout, onUpdate, transparent = false, onBack = nu
 }
 
 // ── 快速连接弹窗 ──────────────────────────────────────────
-function QuickConnectModal({ host, onConnect, onClose }) {
+function QuickConnectModal({ host, port: initPort = 80, https: initHttps = false, onConnect, onClose }) {
   const [proto,   setProto]   = useState('http')
   const [port,    setPort]    = useState(80)
   const [user,    setUser]    = useState('root')
@@ -448,6 +448,10 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
   }, [manualSubnet])
 
   const startScan = useCallback(async () => {
+    // 如果还没检测过网关，自动先检测
+    if (allGWs.length === 0) {
+      await loadGateways()
+    }
     let hints = selectedGWs.length > 0 ? [...selectedGWs] : []
     if (hints.length === 0) {
       try {
@@ -471,7 +475,8 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
         background: bgUrl ? `url(${bgUrl}) center/cover no-repeat` : 'var(--bg)'}}>
         <TitleBar version={version} transparent={!!bgUrl}
           onAbout={()=>setShowAbout(true)}
-          onUpdate={()=>{setShowUpdate(true);doCheckUpdate()}}/>
+          onUpdate={()=>{setShowUpdate(true);doCheckUpdate()}}
+          onBack={onBack || (() => setView('home'))}/>
         <div style={{flex:1,overflow:'auto',display:'flex',alignItems:'center',justifyContent:'center',padding:24,
           background:bgUrl?'rgba(13,17,23,0.65)':undefined,backdropFilter:bgUrl?'blur(2px)':undefined}}>
           <div style={{width:'100%',maxWidth:520}}>
@@ -641,7 +646,7 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
       </div>
 
       {quickConnect && (
-        <QuickConnectModal host={quickConnect.host}
+        <QuickConnectModal host={quickConnect.host} port={quickConnect.port} https={quickConnect.https}
           onConnect={(client,config)=>{setQuickConnect(null);onConnected({client,config,manager:mgr})}}
           onClose={()=>setQuickConnect(null)}/>
       )}

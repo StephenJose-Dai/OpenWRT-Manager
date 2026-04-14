@@ -203,14 +203,6 @@ class OpenWrtClient {
       return this._parseDHCPLeases(f.data || '');
     } catch {}
 
-    // 方法3: 通过 ubus network.interface 获取（不含 DHCP 详情，但能看到接入设备）
-    try {
-      const info = await this.getNetworkInfo();
-      return info
-        .filter(i => i.up && i.ipv4)
-        .map(i => ({ ip: i.ipv4, mac: '', hostname: i.name }));
-    } catch {}
-
     return [];
   }
 
@@ -352,37 +344,51 @@ class LANScanner {
   }
 
   async _probe(host) {
-    try {
-      const url = `http://${host}/ubus`;
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), this._timeout);
+    // 尝试多个端口：80 (默认), 443 (HTTPS), 8080, 8443
+    const attempts = [
+      { url: `http://${host}/ubus`,  https: false },
+      { url: `http://${host}:8080/ubus`, https: false },
+      { url: `https://${host}/ubus`, https: true  },
+      { url: `https://${host}:8443/ubus`, https: true },
+    ];
 
-      const resp = await this._fetcher(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1, method: 'call',
-          params: ['00000000000000000000000000000000', 'session', 'login',
-                   { username: '', password: '' }]
-        }),
-        signal: ctrl.signal
-      }).finally(() => clearTimeout(timer));
+    for (const { url, https } of attempts) {
+      try {
+        const ctrl  = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), this._timeout);
 
-      if (!resp.ok) return null;
+        const resp = await this._fetcher(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1, method: 'call',
+            params: ['00000000000000000000000000000000', 'session', 'login',
+                     { username: '', password: '' }]
+          }),
+          signal: ctrl.signal
+        }).finally(() => clearTimeout(timer));
 
-      const text = await resp.text();
-      let data;
-      try { data = JSON.parse(text); } catch { return null; }
+        if (!resp.ok) continue;
 
-      // ubus JSON-RPC 特征：result[0] 是错误码
-      // 0=成功 6=需要认证 → 确认是 OpenWrt/ubus 设备
-      const code = data.result?.[0];
-      if (code === 6) return { reachable: true, isOpenWrt: true };
-      if (code === 0) return { reachable: true, isOpenWrt: true };
-      // 有 jsonrpc 字段但 code 不是预期值，也认为是 ubus 设备
-      if (data.jsonrpc === '2.0' && data.id === 1) return { reachable: true, isOpenWrt: false };
-      return null;
-    } catch { return null; }
+        const text = await resp.text();
+        let data;
+        try { data = JSON.parse(text); } catch { continue; }
+
+        const code = data.result?.[0];
+        if (code === 6 || code === 0) {
+          // 提取实际端口
+          const m = url.match(/:(\d+)\//);
+          const port = m ? +m[1] : (https ? 443 : 80);
+          return { reachable: true, isOpenWrt: true, https, port };
+        }
+        if (data.jsonrpc === '2.0' && data.id === 1) {
+          const m = url.match(/:(\d+)\//);
+          const port = m ? +m[1] : (https ? 443 : 80);
+          return { reachable: true, isOpenWrt: false, https, port };
+        }
+      } catch { /* 超时或网络错误，尝试下一个端口 */ }
+    }
+    return null;
   }
 
   _buildCandidates(hints = []) {
