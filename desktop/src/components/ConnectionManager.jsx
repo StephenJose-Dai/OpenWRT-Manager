@@ -478,33 +478,42 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
   const startScan = useCallback(async () => {
     setScanning(true); setFound([])
 
-    // 每次扫描都重新获取网关（避免闭包里的旧值问题）
+    // 获取网关列表
     let hints = []
     try {
       const gwInfo = await window.electron?.getGateways?.()
       const gwList = gwInfo?.all ?? (Array.isArray(gwInfo) ? gwInfo : [])
       hints = [...gwList]
-      // 更新显示的网关列表
-      if (gwList.length > 0) {
-        setAllGWs(gwList)
-        setSelectedGWs(gwList)
-      }
+      if (gwList.length > 0) { setAllGWs(gwList); setSelectedGWs(gwList) }
     } catch {}
 
-    // 加入手动指定的子网
     if (manualSubnet.trim()) {
       const p = manualSubnet.trim().replace(/\/$/, '')
       hints = [...new Set([p+'.1', p+'.254', ...hints])]
     }
 
-    // 如果还是空的，用常见默认值
-    if (hints.length === 0) {
-      hints = ['192.168.1.1','192.168.0.1','192.168.31.1','10.0.0.1']
-    }
+    // 加上常见默认地址兜底
+    const defaults = ['192.168.1.1','192.168.0.1','192.168.31.1','192.168.100.1',
+                      '10.0.0.1','10.0.1.1','172.16.0.1','172.16.1.1']
+    hints = [...new Set([...hints, ...defaults])]
 
-    console.log('[Scan] hints:', hints)
-    scanner = new LANScanner(window.fetch.bind(window), 5000)
-    await scanner.scan(item => setFound(f => [...f, item]), hints)
+    // 用主进程代理探测（绕过 CORS），每批 8 个并发
+    const batchSize = 8
+    for (let i = 0; i < hints.length; i += batchSize) {
+      const batch = hints.slice(i, i + batchSize)
+      const results = await Promise.allSettled(
+        batch.map(host =>
+          window.electron?.ubusProbe
+            ? window.electron.ubusProbe(host)
+            : Promise.resolve(null)
+        )
+      )
+      results.forEach((r, j) => {
+        if (r.status === 'fulfilled' && r.value) {
+          setFound(f => [...f, { host: batch[j], ...r.value }])
+        }
+      })
+    }
     setScanning(false)
   }, [manualSubnet])
 

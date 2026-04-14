@@ -173,15 +173,16 @@ function createTray() {
 // ── IPC 处理器（统一注册，避免重复） ──────────────────────
 function registerIPC() {
   // ubus 代理：主进程转发所有路由器请求，完全绕过 CORS 限制
-  // 渲染进程的 Chromium fetch 受 CORS 限制，主进程的 net.request 不受限制
   ipcMain.handle('ubus:request', async (_, { url, body }) => {
     return new Promise((resolve, reject) => {
       try {
-        const req = net.request({
+        // 使用当前 ignoreSSL 状态决定是否跳过证书验证
+        const reqOptions = {
           method: 'POST',
           url: url,
           redirect: 'follow'
-        })
+        }
+        const req = net.request(reqOptions)
         req.setHeader('Content-Type', 'application/json')
         req.setHeader('Accept', 'application/json')
 
@@ -222,6 +223,47 @@ function registerIPC() {
         reject(err)
       }
     })
+  })
+
+  // 扫描探测：主进程探测单个 IP，绕过 CORS
+  ipcMain.handle('ubus:probe', async (_, { host }) => {
+    const ports = [
+      { url: `http://${host}/ubus`,      https: false, port: 80   },
+      { url: `http://${host}:8080/ubus`, https: false, port: 8080 },
+      { url: `https://${host}/ubus`,     https: true,  port: 443  },
+    ]
+    const body = JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'call',
+      params: ['00000000000000000000000000000000', 'session', 'login', { username: '', password: '' }]
+    })
+
+    const tryOne = ({ url, https, port }) => new Promise((resolve) => {
+      try {
+        const req = net.request({ method: 'POST', url, redirect: 'follow' })
+        req.setHeader('Content-Type', 'application/json')
+        let data = ''
+        const timer = setTimeout(() => { req.abort(); resolve(null) }, 3000)
+        req.on('response', res => {
+          res.on('data', c => { data += c })
+          res.on('end', () => {
+            clearTimeout(timer)
+            try {
+              const j = JSON.parse(data)
+              const code = j.result?.[0]
+              if (code === 6 || code === 0 || (j.jsonrpc === '2.0' && j.id === 1)) {
+                resolve({ reachable: true, isOpenWrt: code === 6 || code === 0, https, port })
+              } else { resolve(null) }
+            } catch { resolve(null) }
+          })
+        })
+        req.on('error', () => { clearTimeout(timer); resolve(null) })
+        req.write(body)
+        req.end()
+      } catch { resolve(null) }
+    })
+
+    const results = await Promise.all(ports.map(tryOne))
+    return results.find(r => r !== null) || null
   })
 
   ipcMain.handle('net:getGateways', () => getSmartGateways())
@@ -285,6 +327,16 @@ function registerIPC() {
 
 // ── 应用入口 ───────────────────────────────────────────────
 app.whenReady().then(() => {
+  // SSL 证书验证：主进程的 net.request 走 session 级别的验证
+  // 当 currentIgnoreSSL=true 时，跳过所有证书验证
+  session.defaultSession.setCertificateVerifyProc((request, callback) => {
+    if (currentIgnoreSSL) {
+      callback(0)  // 0 = 信任
+    } else {
+      callback(-3) // -3 = 使用默认验证
+    }
+  })
+
   // 移除路由器响应的 CSP 头，否则可能拦截资源
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const h = { ...details.responseHeaders }
