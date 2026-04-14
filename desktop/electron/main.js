@@ -217,26 +217,30 @@ function createWindow() {
 
 function createTray() {
   try {
-    // 优先用 extraResources 里的真实路径（不在 asar 虚拟文件系统内）
-    // 这样 nativeImage.createFromPath 在所有平台都能正确加载
     const assetsDir = isDev
       ? path.join(__dirname, '../assets')
       : path.join(process.resourcesPath, 'assets')
 
-    const trayPath = path.join(assetsDir, 'tray.png')
-    const iconPath = path.join(assetsDir, 'icon.png')
-    const usePath  = fs.existsSync(trayPath) ? trayPath : iconPath
+    // 按平台选择合适尺寸：Windows 用 16px，macOS 用 22px，Linux 用 24px
+    const sizeSuffix = process.platform === 'darwin' ? '24' : '16'
+    const candidates = [
+      path.join(assetsDir, `tray_${sizeSuffix}.png`),
+      path.join(assetsDir, 'tray.png'),
+      path.join(assetsDir, 'icon.png'),
+    ]
 
-    if (!fs.existsSync(usePath)) {
-      console.warn('托盘图标文件不存在:', usePath)
+    const usePath = candidates.find(p => fs.existsSync(p))
+    if (!usePath) {
+      console.warn('未找到托盘图标，跳过托盘创建')
       return
     }
 
-    const icon = nativeImage.createFromPath(usePath)
-    // Windows 托盘图标需要小尺寸，macOS retina 需要原始尺寸
-    const trayIcon = process.platform === 'darwin'
-      ? icon
-      : icon.resize({ width: 16, height: 16 })
+    // 不 resize — 直接用文件里的尺寸，避免 resize 产生空图像
+    const trayIcon = nativeImage.createFromPath(usePath)
+    if (trayIcon.isEmpty()) {
+      console.warn('托盘图标为空:', usePath)
+      return
+    }
 
     tray = new Tray(trayIcon)
     tray.setToolTip('OpenWrt Manager')
@@ -247,7 +251,6 @@ function createTray() {
       { label: '退出', click: () => { app.isQuitting = true; app.quit() } }
     ]))
     tray.on('double-click', () => mainWindow?.show())
-    console.log('托盘图标创建成功:', usePath)
   } catch (e) {
     console.warn('托盘初始化失败:', e.message)
   }

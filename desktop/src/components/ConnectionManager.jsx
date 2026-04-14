@@ -103,18 +103,19 @@ function TitleBar({ version, onAbout, onUpdate, transparent = false, onBack = nu
       background: transparent ? 'rgba(13,17,23,0.4)' : undefined,
       backdropFilter: transparent ? 'blur(8px)' : undefined,
     }}>
-      <div className="titlebar-left" style={{display:'flex',alignItems:'center',gap:6}}>
+      <div className="titlebar-left" style={{display:'flex',alignItems:'center',gap:6,WebkitAppRegion:'no-drag'}}>
         {onBack && (
           <button onClick={onBack} style={{
-            WebkitAppRegion:'no-drag', background:'rgba(255,255,255,0.1)',
+            background:'rgba(255,255,255,0.1)',
             border:'1px solid rgba(255,255,255,0.15)', borderRadius:5,
-            color:'rgba(255,255,255,0.75)', cursor:'pointer',
-            padding:'2px 9px', fontSize:11, flexShrink:0
+            color:'rgba(255,255,255,0.85)', cursor:'pointer',
+            padding:'3px 10px', fontSize:12, flexShrink:0,
+            display:'flex', alignItems:'center', gap:4
           }}>← 返回</button>
         )}
         <img src="./assets/icon.png" width="14" height="14" style={{borderRadius:3,flexShrink:0}} alt="" onError={e=>e.target.style.display='none'}/>
-        <span style={{WebkitAppRegion:'drag'}}>OpenWrt Manager</span>
-        {version && <span style={{fontSize:10,color:'rgba(255,255,255,0.3)',marginLeft:4}}>v{version}</span>}
+        <span style={{WebkitAppRegion:'drag',cursor:'default'}}>OpenWrt Manager</span>
+        {version && <span style={{fontSize:10,color:'rgba(255,255,255,0.3)',marginLeft:4,WebkitAppRegion:'drag'}}>v{version}</span>}
       </div>
       <div className="titlebar-right" style={{WebkitAppRegion:'no-drag'}}>
         <button className="titlebar-menu-btn" onClick={onUpdate} title="检查更新">↑</button>
@@ -397,10 +398,20 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
   const bgUrl = useBingWallpaper()
 
   useEffect(() => {
-    mgr.load().then(() => setRouters(mgr.listRouters()))
+    mgr.load().then(() => {
+      const list = mgr.listRouters()
+      setRouters(list)
+      // 自动登录：找第一个 autoLogin=true 且有密码的路由器
+      const autoR = list.find(r => r.autoLogin && r.password)
+      if (autoR) {
+        // 先设置 SSL 忽略状态，再连接
+        window.electron?.setSSLIgnore?.(autoR.ignoreSSL || false)
+        connectRouter(autoR.id, autoR.password)
+      }
+    })
     window.electron?.getVersion?.().then(v => setVersion(v)).catch(() => {})
     window.electron?.onCheckUpdate?.(() => { setShowUpdate(true); doCheckUpdate() })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const doCheckUpdate = useCallback(async () => {
     setChecking(true)

@@ -148,6 +148,34 @@ class OpenWrtClient {
   // ─── 网络接口 ──────────────────────────────────────────
   async getNetworkInterfaces() { return this.getNetworkInfo(); }  // alias
 
+  // 读取精确的接口流量统计（直接从 /proc/net/dev 获取）
+  async getNetworkStats() {
+    try {
+      const f = await this.call('file', 'read', { path: '/proc/net/dev' });
+      const lines = (f.data || '').split('\n').slice(2); // 跳过两行标题
+      const stats = {};
+      lines.forEach(line => {
+        const parts = line.trim().split(/[:\s]+/).filter(Boolean);
+        if (parts.length >= 10) {
+          stats[parts[0]] = {
+            rxBytes: parseInt(parts[1]) || 0,
+            txBytes: parseInt(parts[9]) || 0,
+          };
+        }
+      });
+      return stats; // { "eth0": { rxBytes, txBytes }, "br-lan": {...}, ... }
+    } catch {
+      // 回退到 network.interface
+      const ifaces = await this.getNetworkInfo();
+      const stats = {};
+      ifaces.forEach(i => {
+        if (i.ifname) stats[i.ifname] = { rxBytes: i.rxBytes, txBytes: i.txBytes };
+        stats[i.name] = { rxBytes: i.rxBytes, txBytes: i.txBytes };
+      });
+      return stats;
+    }
+  }
+
   async getNetworkInfo() {
     const status = await this.call('network.interface', 'dump');
     return (status.interface || []).map(iface => ({
@@ -197,10 +225,43 @@ class OpenWrtClient {
       }
     } catch {}
 
-    // 方法2: 读 /tmp/dhcp.leases 文件
+    // 方法2: 读 /tmp/dhcp.leases 文件（dnsmasq 标准路径）
     try {
       const f = await this.call('file', 'read', { path: '/tmp/dhcp.leases' });
-      return this._parseDHCPLeases(f.data || '');
+      const parsed = this._parseDHCPLeases(f.data || '');
+      if (parsed.length > 0) return parsed;
+    } catch {}
+
+    // 方法3: 通过 ubus dhcp ipv4leases（odhcp6c）
+    try {
+      const res = await this.call('dhcp', 'ipv4leases');
+      if (res.device) {
+        const list = Object.values(res.device).flatMap(dev =>
+          (dev['ipv4-address'] || []).map(a => ({
+            ip:       a.address || '',
+            mac:      dev['mac-address'] || '',
+            hostname: dev.hostname || '',
+          }))
+        ).filter(d => d.ip);
+        if (list.length > 0) return list;
+      }
+    } catch {}
+
+    // 方法4: 读 ARP 表（/proc/net/arp），覆盖面最广
+    try {
+      const arpFile = await this.call('file', 'read', { path: '/proc/net/arp' });
+      const lines = (arpFile.data || '').split('\n').slice(1); // 跳过标题行
+      const devices = lines
+        .map(line => {
+          const parts = line.trim().split(/\s+/);
+          // 格式: IP HW_TYPE FLAGS MAC Mask Device
+          if (parts.length >= 4 && parts[2] === '0x2') { // 0x2 = 已解析
+            return { ip: parts[0], mac: parts[3].toUpperCase(), hostname: '' };
+          }
+          return null;
+        })
+        .filter(d => d && d.ip && !d.ip.startsWith('0.') && d.mac !== '00:00:00:00:00:00');
+      if (devices.length > 0) return devices;
     } catch {}
 
     return [];

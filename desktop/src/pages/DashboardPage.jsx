@@ -23,12 +23,16 @@ export default function DashboardPage({ client }) {
       const sysInfo = await client.getSystemInfo()
       setInfo(sysInfo)
       try {
-        const ifaces = await client.getNetworkInterfaces()
-        const eth = ifaces.find(i => i.name === 'wan' || i.ifname === 'eth0' || i.up)
-        if (eth) {
+        const stats = await client.getNetworkStats()
+        // 找 wan 相关接口
+        const wanKey = Object.keys(stats).find(k =>
+          k === 'wan' || k === 'pppoe-wan' || k === 'eth1' ||
+          (k !== 'lo' && !k.startsWith('br-') && stats[k].rxBytes > 0)
+        )
+        if (wanKey) {
           setHistory(h => [...h, {
-            rx: eth.rxBytes || 0,
-            tx: eth.txBytes || 0,
+            rx: stats[wanKey].rxBytes || 0,
+            tx: stats[wanKey].txBytes || 0,
             ts: Date.now()
           }].slice(-60))
         }
