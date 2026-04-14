@@ -476,26 +476,37 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
   }, [manualSubnet])
 
   const startScan = useCallback(async () => {
-    // 如果还没检测过网关，自动先检测
-    if (allGWs.length === 0) {
-      await loadGateways()
-    }
-    let hints = selectedGWs.length > 0 ? [...selectedGWs] : []
-    if (hints.length === 0) {
-      try {
-        const gwInfo = await window.electron?.getGateways?.()
-        hints = gwInfo?.all ?? (Array.isArray(gwInfo) ? gwInfo : [])
-      } catch {}
-      if (manualSubnet.trim()) {
-        const p = manualSubnet.trim().replace(/\/$/, '')
-        hints = [...new Set([p+'.1', p+'.254', ...hints])]
-      }
-    }
     setScanning(true); setFound([])
-    scanner = new LANScanner(window.fetch.bind(window), 3000)
+
+    // 每次扫描都重新获取网关（避免闭包里的旧值问题）
+    let hints = []
+    try {
+      const gwInfo = await window.electron?.getGateways?.()
+      const gwList = gwInfo?.all ?? (Array.isArray(gwInfo) ? gwInfo : [])
+      hints = [...gwList]
+      // 更新显示的网关列表
+      if (gwList.length > 0) {
+        setAllGWs(gwList)
+        setSelectedGWs(gwList)
+      }
+    } catch {}
+
+    // 加入手动指定的子网
+    if (manualSubnet.trim()) {
+      const p = manualSubnet.trim().replace(/\/$/, '')
+      hints = [...new Set([p+'.1', p+'.254', ...hints])]
+    }
+
+    // 如果还是空的，用常见默认值
+    if (hints.length === 0) {
+      hints = ['192.168.1.1','192.168.0.1','192.168.31.1','10.0.0.1']
+    }
+
+    console.log('[Scan] hints:', hints)
+    scanner = new LANScanner(window.fetch.bind(window), 5000)
     await scanner.scan(item => setFound(f => [...f, item]), hints)
     setScanning(false)
-  }, [selectedGWs, manualSubnet])
+  }, [manualSubnet])
 
   if (view === 'add') {
     return (

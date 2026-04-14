@@ -306,7 +306,23 @@ class OpenWrtClient {
   }
 
   async execCommand(cmd, args = []) {
+    // 尝试完整路径，rpcd-mod-file 需要可执行文件的完整路径
     return this.call('file', 'exec', { command: cmd, args });
+  }
+
+  // 带完整路径的命令执行（避免 PATH 问题）
+  async execCommandFull(cmd, args = []) {
+    // 常见命令的完整路径映射
+    const pathMap = {
+      'ls': '/bin/ls', 'cat': '/bin/cat', 'echo': '/bin/echo',
+      'ps': '/bin/ps', 'top': '/usr/bin/top',
+      'iptables': '/usr/sbin/iptables', 'ip': '/sbin/ip',
+      'uci': '/sbin/uci', 'opkg': '/bin/opkg',
+      'wifi': '/sbin/wifi', 'ifconfig': '/sbin/ifconfig',
+      'logread': '/sbin/logread', 'dmesg': '/bin/dmesg',
+    };
+    const fullCmd = pathMap[cmd] || cmd;
+    return this.call('file', 'exec', { command: fullCmd, args });
   }
 
   // 检测路由器已安装的功能，用于动态菜单
