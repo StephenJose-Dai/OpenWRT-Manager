@@ -8,6 +8,8 @@ const fs   = require('fs')
 const url  = require('url')
 const os   = require('os')
 const { execSync } = require('child_process')
+const http  = require('http')
+const https = require('https')
 
 // ── 必须在 app ready 之前设置的选项 ────────────────────────
 // 性能优化：这些 flag 必须在 ready 之前调用才有效
@@ -39,6 +41,53 @@ function distDir() {
 }
 
 // ── 获取本机网关 ───────────────────────────────────────────
+// Node.js 原生 http/https 请求（绕过 Chromium CORS 和 SSL 限制）
+function nodeRequest(url, body, ignoreSSL = false, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    try {
+      const isHttps = url.startsWith('https://')
+      const lib     = isHttps ? https : http
+      const urlObj  = new URL(url)
+
+      const agent = isHttps
+        ? new https.Agent({ rejectUnauthorized: !ignoreSSL, keepAlive: false })
+        : new http.Agent({ keepAlive: false })
+
+      const bodyBuf = Buffer.from(body, 'utf8')
+      const options = {
+        hostname: urlObj.hostname,
+        port:     urlObj.port || (isHttps ? 443 : 80),
+        path:     urlObj.pathname || '/ubus',
+        method:   'POST',
+        headers:  {
+          'Content-Type':   'application/json',
+          'Content-Length': bodyBuf.length,
+        },
+        agent,
+        timeout: timeoutMs,
+      }
+
+      const req = lib.request(options, (res) => {
+        let data = ''
+        res.on('data', c => { data += c })
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            reject(new Error('HTTP ' + res.statusCode)); return
+          }
+          try   { resolve(JSON.parse(data)) }
+          catch { reject(new Error('JSON parse error: ' + data.slice(0, 80))) }
+        })
+      })
+      req.on('error',   (err) => reject(err))
+      req.on('timeout', ()    => { req.destroy(); reject(new Error('连接超时')) })
+      req.write(bodyBuf)
+      req.end()
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
 function getSmartGateways() {
   const primary = [], secondary = []
 
@@ -183,111 +232,34 @@ function createTray() {
 // ── IPC 处理器（统一注册，避免重复） ──────────────────────
 function registerIPC() {
   // ubus 代理：主进程转发所有路由器请求，完全绕过 CORS 限制
-  ipcMain.handle('ubus:request', async (_, { url, body, ignoreSSL: reqIgnoreSSL }) => {
-    // 临时切换 SSL 忽略状态（用于这次请求）
-    const prevIgnoreSSL = currentIgnoreSSL
-    if (reqIgnoreSSL !== undefined) {
-      currentIgnoreSSL = !!reqIgnoreSSL
-      // 更新 session 证书验证策略
-      session.defaultSession.setCertificateVerifyProc((req2, cb) => {
-        cb(currentIgnoreSSL ? 0 : -3)
-      })
-    }
-
-    return new Promise((resolve, reject) => {
-      try {
-        const req = net.request({
-          method: 'POST',
-          url: url,
-          redirect: 'follow'
-        })
-        req.setHeader('Content-Type', 'application/json')
-        req.setHeader('Accept', 'application/json')
-
-        let responseData = ''
-        let statusCode = 200
-
-        req.on('response', (res) => {
-          statusCode = res.statusCode
-          res.on('data', (chunk) => { responseData += chunk.toString() })
-          res.on('end', () => {
-            if (statusCode < 200 || statusCode >= 300) {
-              reject(new Error('HTTP ' + statusCode))
-              return
-            }
-            // 恢复 SSL 状态
-            if (reqIgnoreSSL !== undefined && prevIgnoreSSL !== currentIgnoreSSL) {
-              currentIgnoreSSL = prevIgnoreSSL
-              session.defaultSession.setCertificateVerifyProc((req2, cb) => {
-                cb(currentIgnoreSSL ? 0 : -3)
-              })
-            }
-            try {
-              resolve(JSON.parse(responseData))
-            } catch (e) {
-              reject(new Error('JSON parse error: ' + responseData.slice(0, 100)))
-            }
-          })
-        })
-
-        req.on('error', (err) => {
-          reject(new Error(err.message || 'Network error'))
-        })
-
-        // 设置超时
-        const timer = setTimeout(() => {
-          req.abort()
-          reject(new Error('连接超时'))
-        }, 15000)
-
-        req.on('response', () => clearTimeout(timer))
-
-        req.write(body)
-        req.end()
-      } catch (err) {
-        reject(err)
-      }
-    })
+  // ubus 代理：用 Node.js http/https 发请求，完全绕过 Chromium CORS 和 SSL 限制
+  ipcMain.handle('ubus:request', (_, { url, body, ignoreSSL: reqIgnoreSSL }) => {
+    const shouldIgnoreSSL = reqIgnoreSSL !== undefined ? !!reqIgnoreSSL : currentIgnoreSSL
+    return nodeRequest(url, body, shouldIgnoreSSL)
   })
 
-  // 扫描探测：主进程探测单个 IP，绕过 CORS
+
   ipcMain.handle('ubus:probe', async (_, { host }) => {
-    const ports = [
-      { url: `http://${host}/ubus`,      https: false, port: 80   },
-      { url: `http://${host}:8080/ubus`, https: false, port: 8080 },
-      { url: `https://${host}/ubus`,     https: true,  port: 443  },
-    ]
     const body = JSON.stringify({
       jsonrpc: '2.0', id: 1, method: 'call',
-      params: ['00000000000000000000000000000000', 'session', 'login', { username: '', password: '' }]
+      params: ['00000000000000000000000000000000', 'session', 'login',
+               { username: '', password: '' }]
     })
-
-    const tryOne = ({ url, https, port }) => new Promise((resolve) => {
+    const attempts = [
+      { url: `http://${host}/ubus`,      isHttps: false, port: 80   },
+      { url: `http://${host}:8080/ubus`, isHttps: false, port: 8080 },
+      { url: `https://${host}/ubus`,     isHttps: true,  port: 443  },
+    ]
+    const results = await Promise.all(attempts.map(async ({ url, isHttps, port }) => {
       try {
-        const req = net.request({ method: 'POST', url, redirect: 'follow' })
-        req.setHeader('Content-Type', 'application/json')
-        let data = ''
-        const timer = setTimeout(() => { req.abort(); resolve(null) }, 3000)
-        req.on('response', res => {
-          res.on('data', c => { data += c })
-          res.on('end', () => {
-            clearTimeout(timer)
-            try {
-              const j = JSON.parse(data)
-              const code = j.result?.[0]
-              if (code === 6 || code === 0 || (j.jsonrpc === '2.0' && j.id === 1)) {
-                resolve({ reachable: true, isOpenWrt: code === 6 || code === 0, https, port })
-              } else { resolve(null) }
-            } catch { resolve(null) }
-          })
-        })
-        req.on('error', () => { clearTimeout(timer); resolve(null) })
-        req.write(body)
-        req.end()
-      } catch { resolve(null) }
-    })
-
-    const results = await Promise.all(ports.map(tryOne))
+        const data = await nodeRequest(url, body, true, 3000)
+        const code = data.result?.[0]
+        if (code === 6 || code === 0 || (data.jsonrpc === '2.0' && data.id === 1)) {
+          return { reachable: true, isOpenWrt: code === 6 || code === 0, https: isHttps, port }
+        }
+        return null
+      } catch { return null }
+    }))
     return results.find(r => r !== null) || null
   })
 
@@ -331,19 +303,26 @@ function registerIPC() {
   // 检查更新（GitHub releases API）
   ipcMain.handle('app:checkUpdate', async () => {
     try {
-      return await new Promise((resolve) => {
-        const req = net.request({
-          url: 'https://api.github.com/repos/YOUR_USERNAME/openwrt-manager/releases/latest',
+      const data = await nodeRequest(
+        'https://api.github.com/repos/YOUR_USERNAME/openwrt-manager/releases/latest',
+        JSON.stringify({}),
+        false
+      ).catch(() => null)
+      if (!data) return null
+      // GET 请求用技巧：nodeRequest 是 POST，直接用 https
+      const { get } = require('https')
+      return await new Promise(resolve => {
+        const req = get({
+          hostname: 'api.github.com',
+          path: '/repos/YOUR_USERNAME/openwrt-manager/releases/latest',
           headers: { 'User-Agent': 'OpenWrt-Manager/' + APP_VERSION }
-        })
-        let data = ''
-        req.on('response', res => {
-          res.on('data', c => { data += c })
+        }, res => {
+          let d = ''
+          res.on('data', c => d += c)
           res.on('end', () => {
             try {
-              const j = JSON.parse(data)
-              if (j.tag_name) resolve({ tag: j.tag_name, url: j.html_url, body: j.body || '' })
-              else resolve(null)
+              const j = JSON.parse(d)
+              resolve(j.tag_name ? { tag: j.tag_name, url: j.html_url, body: j.body || '' } : null)
             } catch { resolve(null) }
           })
         })
@@ -356,16 +335,6 @@ function registerIPC() {
 
 // ── 应用入口 ───────────────────────────────────────────────
 app.whenReady().then(() => {
-  // SSL 证书验证：主进程的 net.request 走 session 级别的验证
-  // 当 currentIgnoreSSL=true 时，跳过所有证书验证
-  session.defaultSession.setCertificateVerifyProc((request, callback) => {
-    if (currentIgnoreSSL) {
-      callback(0)  // 0 = 信任
-    } else {
-      callback(-3) // -3 = 使用默认验证
-    }
-  })
-
   // 移除路由器响应的 CSP 头，否则可能拦截资源
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const h = { ...details.responseHeaders }
@@ -384,4 +353,5 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
   else { mainWindow?.show(); mainWindow?.focus() }
 })
-app.on('before-quit', () => { app.isQuitting = true })
+app.on('before-quit', () => { app.isQuitting = true })  // 扫描探测：用 Node.js http/https 探测单个 IP，绕过 CORS
+

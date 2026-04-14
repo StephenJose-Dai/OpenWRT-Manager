@@ -677,7 +677,7 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
 
             {!scanning && found.length === 0 && (
               <div style={{textAlign:'center',padding:'8px 0',color:'rgba(255,255,255,0.3)',fontSize:13}}>
-                {allGWs.length===0 ? '点击"检测网关"获取本机网关，再点"开始扫描"' : '未发现路由器，请确认路由器已配置 ubus_cors=1'}
+                {allGWs.length===0 ? '点击"检测网关"获取本机网关，再点"开始扫描"' : '未发现路由器。请手动输入 IP 并指定网段后重试，或点击手动添加'}
               </div>
             )}
           </div>
