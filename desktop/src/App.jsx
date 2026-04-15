@@ -47,6 +47,7 @@ export default function App() {
   const [routerManager, setRouterManager] = useState(null)
   const [addingRouter,  setAddingRouter]  = useState(false) // 已连接时添加新路由器
   const [features,      setFeatures]      = useState({})     // 路由器功能
+  const [aclReady,      setAclReady]      = useState(null)   // null=未知 true=OK false=需配置
 
   const handleConnected = ({ client, config, manager }) => {
     setClient(client)
@@ -55,6 +56,18 @@ export default function App() {
     setAddingRouter(false)
     // 异步检测功能，不阻塞启动
     client.detectFeatures().then(f => setFeatures(f)).catch(() => {})
+    // 每次连接都写入 ACL 文件，确保权限始终最新
+    client.setupACL().then(r => {
+      if (r.success) {
+        setTimeout(() => {
+          client.checkACL().then(ok => setAclReady(ok))
+        }, 1500)
+      } else {
+        // 写入失败（可能没有 file.write 权限），降级到检测
+        client.checkACL().then(ok => setAclReady(ok))
+          .catch(() => setAclReady(false))
+      }
+    }).catch(() => setAclReady(false))
   }
 
   const handleDisconnect = () => {
@@ -88,6 +101,7 @@ export default function App() {
               config={routerConfig}
               manager={routerManager}
               features={features}
+              aclReady={aclReady}
               onDisconnect={handleDisconnect}
               onSwitchRouter={handleConnected}
               onAddRouter={() => setAddingRouter(true)}

@@ -7,9 +7,9 @@ opkg update
 opkg install rpcd-mod-file luci-mod-rpc
 
 echo ">>> 配置 ACL 权限..."
-cat > /usr/share/rpcd/acl.d/openwrt-manager.json << 'EOF'
+cat > /usr/share/rpcd/acl.d/owm.json << 'EOF'
 {
-  "openwrt-manager": {
+  "root": {
     "description": "OpenWrt Manager full access",
     "read": {
       "ubus": { "*": [ "*" ] },

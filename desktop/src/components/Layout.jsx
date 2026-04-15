@@ -24,7 +24,7 @@ const TAIL_NAV = [
   { path: 'terminal', label: '终端', Icon: Terminal },
 ]
 
-export default function Layout({ client, config, manager, features = {}, onDisconnect, onSwitchRouter, onAddRouter }) {
+export default function Layout({ client, config, manager, features = {}, aclReady = null, onDisconnect, onSwitchRouter, onAddRouter }) {
   const [collapsed,    setCollapsed]    = useState(false)
   const [online,       setOnline]       = useState(true)
   const [showSwitcher, setShowSwitcher] = useState(false)
@@ -133,6 +133,29 @@ export default function Layout({ client, config, manager, features = {}, onDisco
         </aside>
 
         <main className="content" onClick={() => showSwitcher && setShowSwitcher(false)}>
+          {aclReady === false && (
+            <div style={{background:'#2d1f00',border:'1px solid #f59e0b',borderRadius:8,
+              padding:'10px 16px',marginBottom:16,display:'flex',
+              alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+              <div>
+                <span style={{color:'#f59e0b',fontWeight:600}}>⚠ rpcd 权限未配置</span>
+                <span style={{color:'#d97706',fontSize:12,marginLeft:8}}>
+                  设备/防火墙/终端功能受限
+                </span>
+              </div>
+              <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                <code style={{background:'#1a1000',padding:'4px 8px',borderRadius:4,
+                  fontSize:11,color:'#fcd34d',userSelect:'all',cursor:'text'}}>
+                  cat &gt; /usr/share/rpcd/acl.d/owm.json &lt;&lt; 'EOF'{"\n"}{"{\"root\":{\"read\":{\"ubus\":{\"*\":[\"*\"]},\"uci\":{\"*\":[\"read\"]},\"file\":{\"*\":[\"read\",\"exec\"]}},\"write\":{\"ubus\":{\"*\":[\"*\"]},\"uci\":{\"*\":[\"read\",\"write\"]},\"file\":{\"*\":[\"read\",\"write\",\"exec\"]}}}"}{"\n"}EOF{"\n"}/etc/init.d/rpcd restart
+                </code>
+                <button onClick={() => client.setupACL().then(r => r.success && window.location.reload())}
+                  style={{background:'#f59e0b',border:'none',borderRadius:6,
+                    color:'#000',padding:'5px 12px',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>
+                  自动配置
+                </button>
+              </div>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

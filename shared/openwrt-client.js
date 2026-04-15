@@ -230,55 +230,52 @@ class OpenWrtClient {
 
   // ─── DHCP 租约（连接设备列表）─────────────────────────
   async getDHCPLeases() {
-    // 方法1: luci-rpc（需要 luci-mod-rpc）
+    // 方法1: ubus dhcp ipv4leases（最标准，dnsmasq/odhcpd 都支持）
+    try {
+      const res = await this.call('dhcp', 'ipv4leases');
+      if (res.device && Object.keys(res.device).length > 0) {
+        const list = Object.values(res.device).flatMap(dev =>
+          (dev['ipv4-address'] || []).map(a => ({
+            ip:       a.address || '',
+            mac:      (dev['mac-address'] || '').toUpperCase(),
+            hostname: dev.hostname || '',
+          }))
+        ).filter(d => d.ip && d.ip !== '0.0.0.0');
+        if (list.length > 0) return list;
+      }
+    } catch {}
+
+    // 方法2: luci-rpc getDHCPLeases（需要 luci-mod-rpc）
     try {
       const res = await this.call('luci-rpc', 'getDHCPLeases');
       const leases = res.leases || res || [];
       if (Array.isArray(leases) && leases.length > 0) {
         return leases.map(d => ({
           ip:       d['ipaddr'] || d['ip-addr'] || d.ip || '',
-          mac:      d['macaddr'] || d['mac-addr'] || d.mac || '',
+          mac:      (d['macaddr'] || d['mac-addr'] || d.mac || '').toUpperCase(),
           hostname: d.hostname || d.name || '',
         })).filter(d => d.ip);
       }
     } catch {}
 
-    // 方法2: 读 /tmp/dhcp.leases 文件（dnsmasq 标准路径）
+    // 方法3: 读 /tmp/dhcp.leases 文件（dnsmasq 标准路径）
     try {
       const f = await this.call('file', 'read', { path: '/tmp/dhcp.leases' });
       const parsed = this._parseDHCPLeases(f.data || '');
       if (parsed.length > 0) return parsed;
     } catch {}
 
-    // 方法3: 通过 ubus dhcp ipv4leases（odhcp6c）
-    try {
-      const res = await this.call('dhcp', 'ipv4leases');
-      if (res.device) {
-        const list = Object.values(res.device).flatMap(dev =>
-          (dev['ipv4-address'] || []).map(a => ({
-            ip:       a.address || '',
-            mac:      dev['mac-address'] || '',
-            hostname: dev.hostname || '',
-          }))
-        ).filter(d => d.ip);
-        if (list.length > 0) return list;
-      }
-    } catch {}
-
-    // 方法4: 读 ARP 表（/proc/net/arp），覆盖面最广
+    // 方法4: 读 ARP 表 /proc/net/arp（最广兼容，不依赖 DHCP）
     try {
       const arpFile = await this.call('file', 'read', { path: '/proc/net/arp' });
-      const lines = (arpFile.data || '').split('\n').slice(1); // 跳过标题行
-      const devices = lines
-        .map(line => {
-          const parts = line.trim().split(/\s+/);
-          // 格式: IP HW_TYPE FLAGS MAC Mask Device
-          if (parts.length >= 4 && parts[2] === '0x2') { // 0x2 = 已解析
-            return { ip: parts[0], mac: parts[3].toUpperCase(), hostname: '' };
-          }
-          return null;
-        })
-        .filter(d => d && d.ip && !d.ip.startsWith('0.') && d.mac !== '00:00:00:00:00:00');
+      const lines = (arpFile.data || '').split('\n').slice(1);
+      const devices = lines.map(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 6 && (parts[2] === '0x2' || parts[2] === '0x0')) {
+          return { ip: parts[0], mac: parts[3].toUpperCase(), hostname: '' };
+        }
+        return null;
+      }).filter(d => d && d.ip && !d.ip.startsWith('0.') && d.mac !== '00:00:00:00:00:00');
       if (devices.length > 0) return devices;
     } catch {}
 
@@ -314,6 +311,64 @@ class OpenWrtClient {
     const res = await this.call('file', 'read', { path: '/tmp/log/messages' })
       .catch(() => this.call('file', 'exec', { command: 'logread', args: ['-l', '200'] }));
     return (res.data || res.stdout || '').split('\n').filter(Boolean);
+  }
+
+  // 自动配置 rpcd ACL（首次连接时调用）
+  async setupACL() {
+    const aclContent = JSON.stringify({
+      "root": {
+        "read": {
+          "ubus": { "*": ["*"] },
+          "uci":  { "*": ["read"] },
+          "file": {
+            "/tmp/dhcp.leases": ["read"],
+            "/proc/net/arp":    ["read"],
+            "/proc/net/dev":    ["read"],
+            "/bin/sh":          ["exec"],
+            "/bin/ls":          ["exec"],
+            "/bin/cat":         ["exec"],
+            "/sbin/logread":    ["exec"]
+          }
+        },
+        "write": {
+          "ubus": { "*": ["*"] },
+          "uci":  { "*": ["read", "write"] },
+          "file": {
+            "/bin/sh":                 ["exec"],
+            "/etc/init.d/firewall":    ["exec"],
+            "/etc/init.d/rpcd":        ["exec"],
+            "/sbin/iptables":          ["exec"],
+            "/usr/sbin/iptables":      ["exec"]
+          }
+        }
+      }
+    }, null, 2);
+
+    try {
+      // 写 ACL 文件
+      await this.call('file', 'write', {
+        path: '/usr/share/rpcd/acl.d/owm.json',
+        data: aclContent
+      });
+      // 重启 rpcd 使权限生效
+      await this.call('file', 'exec', {
+        command: '/etc/init.d/rpcd',
+        args: ['restart']
+      });
+      return { success: true };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  // 检测 ACL 权限是否已配置（测试读 /proc/net/arp）
+  async checkACL() {
+    try {
+      await this.call('file', 'read', { path: '/proc/net/arp' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async execCommand(cmd, args = []) {
