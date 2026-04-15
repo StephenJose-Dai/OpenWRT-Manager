@@ -74,8 +74,34 @@ export default function DevicesPage({ client }) {
 
       {error && devices.length === 0 && (
         <div style={{background:'#1e2530',border:'1px solid #30363d',borderRadius:8,
-          padding:'10px 14px',color:'#8b949e',fontSize:13,marginBottom:12}}>
-          ℹ {error}
+          padding:'12px 14px',fontSize:13,marginBottom:12}}>
+          <div style={{color:'#8b949e',marginBottom:8}}>ℹ {error}</div>
+          <details style={{cursor:'pointer'}}>
+            <summary style={{color:'#58a6ff',fontSize:12}}>查看路由器端配置命令</summary>
+            <pre style={{background:'#0d1117',borderRadius:6,padding:'10px',marginTop:8,
+              fontSize:11,color:'#7ee787',overflow:'auto',userSelect:'all'}}>
+{`opkg update && opkg install rpcd-mod-file luci-mod-rpc
+
+cat > /usr/share/rpcd/acl.d/owm.json << 'EOF'
+{
+  "root": {
+    "read": {
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read"]},
+      "file": {"*": ["read","exec","list"]}
+    },
+    "write": {
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read","write"]},
+      "file": {"*": ["read","write","exec","list"]}
+    }
+  }
+}
+EOF
+
+/etc/init.d/rpcd restart`}
+            </pre>
+          </details>
         </div>
       )}
 

@@ -230,55 +230,52 @@ class OpenWrtClient {
 
   // ─── DHCP 租约（连接设备列表）─────────────────────────
   async getDHCPLeases() {
-    // 方法1: luci-rpc（需要 luci-mod-rpc）
+    // 方法1: ubus dhcp ipv4leases（最标准，dnsmasq/odhcpd 都支持）
+    try {
+      const res = await this.call('dhcp', 'ipv4leases');
+      if (res.device && Object.keys(res.device).length > 0) {
+        const list = Object.values(res.device).flatMap(dev =>
+          (dev['ipv4-address'] || []).map(a => ({
+            ip:       a.address || '',
+            mac:      (dev['mac-address'] || '').toUpperCase(),
+            hostname: dev.hostname || '',
+          }))
+        ).filter(d => d.ip && d.ip !== '0.0.0.0');
+        if (list.length > 0) return list;
+      }
+    } catch {}
+
+    // 方法2: luci-rpc getDHCPLeases（需要 luci-mod-rpc）
     try {
       const res = await this.call('luci-rpc', 'getDHCPLeases');
       const leases = res.leases || res || [];
       if (Array.isArray(leases) && leases.length > 0) {
         return leases.map(d => ({
           ip:       d['ipaddr'] || d['ip-addr'] || d.ip || '',
-          mac:      d['macaddr'] || d['mac-addr'] || d.mac || '',
+          mac:      (d['macaddr'] || d['mac-addr'] || d.mac || '').toUpperCase(),
           hostname: d.hostname || d.name || '',
         })).filter(d => d.ip);
       }
     } catch {}
 
-    // 方法2: 读 /tmp/dhcp.leases 文件（dnsmasq 标准路径）
+    // 方法3: 读 /tmp/dhcp.leases 文件（dnsmasq 标准路径）
     try {
       const f = await this.call('file', 'read', { path: '/tmp/dhcp.leases' });
       const parsed = this._parseDHCPLeases(f.data || '');
       if (parsed.length > 0) return parsed;
     } catch {}
 
-    // 方法3: 通过 ubus dhcp ipv4leases（odhcp6c）
-    try {
-      const res = await this.call('dhcp', 'ipv4leases');
-      if (res.device) {
-        const list = Object.values(res.device).flatMap(dev =>
-          (dev['ipv4-address'] || []).map(a => ({
-            ip:       a.address || '',
-            mac:      dev['mac-address'] || '',
-            hostname: dev.hostname || '',
-          }))
-        ).filter(d => d.ip);
-        if (list.length > 0) return list;
-      }
-    } catch {}
-
-    // 方法4: 读 ARP 表（/proc/net/arp），覆盖面最广
+    // 方法4: 读 ARP 表 /proc/net/arp（最广兼容，不依赖 DHCP）
     try {
       const arpFile = await this.call('file', 'read', { path: '/proc/net/arp' });
-      const lines = (arpFile.data || '').split('\n').slice(1); // 跳过标题行
-      const devices = lines
-        .map(line => {
-          const parts = line.trim().split(/\s+/);
-          // 格式: IP HW_TYPE FLAGS MAC Mask Device
-          if (parts.length >= 4 && parts[2] === '0x2') { // 0x2 = 已解析
-            return { ip: parts[0], mac: parts[3].toUpperCase(), hostname: '' };
-          }
-          return null;
-        })
-        .filter(d => d && d.ip && !d.ip.startsWith('0.') && d.mac !== '00:00:00:00:00:00');
+      const lines = (arpFile.data || '').split('\n').slice(1);
+      const devices = lines.map(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 6 && (parts[2] === '0x2' || parts[2] === '0x0')) {
+          return { ip: parts[0], mac: parts[3].toUpperCase(), hostname: '' };
+        }
+        return null;
+      }).filter(d => d && d.ip && !d.ip.startsWith('0.') && d.mac !== '00:00:00:00:00:00');
       if (devices.length > 0) return devices;
     } catch {}
 
@@ -314,6 +311,51 @@ class OpenWrtClient {
     const res = await this.call('file', 'read', { path: '/tmp/log/messages' })
       .catch(() => this.call('file', 'exec', { command: 'logread', args: ['-l', '200'] }));
     return (res.data || res.stdout || '').split('\n').filter(Boolean);
+  }
+
+  // 自动配置 rpcd ACL（每次连接时调用，覆盖写入确保权限最新）
+  async setupACL() {
+    // ACL 内容：root 用户拥有全部权限
+    // 全权限：ubus/uci/file 全部放开，file 用通配符覆盖所有路径
+    const aclJson = '{"root":{"read":{"ubus":{"*":["*"]},"uci":{"*":["read"]},"file":{"*":["read","exec","list"]}},"write":{"ubus":{"*":["*"]},"uci":{"*":["read","write"]},"file":{"*":["read","write","exec","list"]}}}}';
+
+    // 方法1：file.write（已有权限时）
+    try {
+      await this.call('file', 'write', {
+        path: '/usr/share/rpcd/acl.d/owm.json',
+        data: aclJson
+      });
+      await this.call('file', 'exec', {
+        command: '/bin/sh',
+        args: ['-c', '/etc/init.d/rpcd restart']
+      });
+      return { success: true, method: 'file.write' };
+    } catch {}
+
+    // 方法2：通过 ubus sys call（某些版本有此接口）
+    try {
+      await this.call('file', 'exec', {
+        command: '/bin/sh',
+        args: ['-c',
+          `echo '${aclJson}' > /usr/share/rpcd/acl.d/owm.json && /etc/init.d/rpcd restart`
+        ]
+      });
+      return { success: true, method: 'file.exec' };
+    } catch {}
+
+    // 方法3：luci-rpc setPassword 等其他接口
+    // 所有方法都失败，需要用户手动执行
+    return { success: false, error: 'no_permission' };
+  }
+
+  // 检测 ACL 权限是否已配置（测试读 /proc/net/arp）
+  async checkACL() {
+    try {
+      await this.call('file', 'read', { path: '/proc/net/arp' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async execCommand(cmd, args = []) {
@@ -359,26 +401,48 @@ class OpenWrtClient {
   async detectFeatures() {
     const features = {
       vpn: false, wireguard: false, docker: false,
-      adguard: false, passwall: false, clash: false
+      adguard: false, passwall: false, clash: false,
+      openclash: false, ssr: false, mosdns: false,
     };
+
+    // 用 file.read 检查配置文件（不依赖 file.exec 权限）
+    const fileChecks = [
+      [['vpn'],       '/etc/config/openvpn'],
+      [['wireguard'], '/etc/config/wireguard'],
+      [['adguard'],   '/etc/config/adguardhome'],
+      [['passwall'],  '/etc/config/passwall'],
+      [['passwall'],  '/etc/config/passwall2'],
+      [['clash'],     '/etc/config/clash'],
+      [['openclash'], '/etc/config/openclash'],
+      [['ssr'],       '/etc/config/shadowsocksr'],
+      [['mosdns'],    '/etc/config/mosdns'],
+    ];
+
+    await Promise.allSettled(fileChecks.map(async ([keys, path]) => {
+      try {
+        const r = await this.call('file', 'read', { path });
+        if (r && (r.data !== undefined)) {
+          keys.forEach(k => { if (k in features) features[k] = true; });
+        }
+      } catch {}
+    }));
+
+    // 检查 /etc/init.d/ 里的服务（更广泛）
     try {
-      // 检查各功能配置文件/包是否存在
-      const checks = [
-        ['cat', ['/etc/config/openvpn']],
-        ['cat', ['/etc/config/wireguard']],
-        ['which', ['dockerd']],
-        ['cat', ['/etc/config/adguardhome']],
-        ['cat', ['/etc/config/passwall']],
-        ['which', ['clash']],
-      ];
-      const keys = ['vpn', 'wireguard', 'docker', 'adguard', 'passwall', 'clash'];
-      const results = await Promise.allSettled(
-        checks.map(([cmd, args]) => this.execCommand(cmd, args))
-      );
-      results.forEach((r, i) => {
-        features[keys[i]] = r.status === 'fulfilled' && !!(r.value?.stdout || r.value?.code === 0);
-      });
+      const r = await this.call('file', 'list', { path: '/etc/init.d' });
+      const entries = r?.entries || [];
+      const names = entries.map(e => (e.name || '').toLowerCase());
+      if (names.some(n => /openvpn|ovpn/.test(n)))   features.vpn = true;
+      if (names.some(n => /wireguard|wg/.test(n)))    features.wireguard = true;
+      if (names.some(n => /docker/.test(n)))           features.docker = true;
+      if (names.some(n => /adguard/.test(n)))          features.adguard = true;
+      if (names.some(n => /passwall/.test(n)))         features.passwall = true;
+      if (names.some(n => /clash/.test(n)))            features.clash = true;
+      if (names.some(n => /openclash/.test(n)))        features.openclash = true;
+      if (names.some(n => /shadowsock|ssr/.test(n)))  features.ssr = true;
+      if (names.some(n => /mosdns/.test(n)))           features.mosdns = true;
     } catch {}
+
     return features;
   }
 
