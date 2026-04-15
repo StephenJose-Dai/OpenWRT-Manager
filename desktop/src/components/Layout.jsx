@@ -148,7 +148,18 @@ export default function Layout({ client, config, manager, features = {}, aclRead
                   fontSize:11,color:'#fcd34d',userSelect:'all',cursor:'text'}}>
                   cat &gt; /usr/share/rpcd/acl.d/owm.json &lt;&lt; 'EOF'{"\n"}{"{\"root\":{\"read\":{\"ubus\":{\"*\":[\"*\"]},\"uci\":{\"*\":[\"read\"]},\"file\":{\"*\":[\"read\",\"exec\"]}},\"write\":{\"ubus\":{\"*\":[\"*\"]},\"uci\":{\"*\":[\"read\",\"write\"]},\"file\":{\"*\":[\"read\",\"write\",\"exec\"]}}}"}{"\n"}EOF{"\n"}/etc/init.d/rpcd restart
                 </code>
-                <button onClick={() => client.setupACL().then(r => r.success && window.location.reload())}
+                <button onClick={async () => {
+                    const btn = document.activeElement
+                    if (btn) btn.textContent = '配置中...'
+                    const r = await client.setupACL()
+                    if (r.success) {
+                      if (btn) btn.textContent = '✓ 成功，重连中...'
+                      setTimeout(() => window.location.reload(), 1800)
+                    } else {
+                      if (btn) btn.textContent = '自动配置'
+                      alert('自动配置失败，请手动复制上方命令在路由器 SSH 执行')
+                    }
+                  }}
                   style={{background:'#f59e0b',border:'none',borderRadius:6,
                     color:'#000',padding:'5px 12px',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>
                   自动配置

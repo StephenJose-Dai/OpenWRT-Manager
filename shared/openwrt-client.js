@@ -313,52 +313,38 @@ class OpenWrtClient {
     return (res.data || res.stdout || '').split('\n').filter(Boolean);
   }
 
-  // 自动配置 rpcd ACL（首次连接时调用）
+  // 自动配置 rpcd ACL（每次连接时调用，覆盖写入确保权限最新）
   async setupACL() {
-    const aclContent = JSON.stringify({
-      "root": {
-        "read": {
-          "ubus": { "*": ["*"] },
-          "uci":  { "*": ["read"] },
-          "file": {
-            "/tmp/dhcp.leases": ["read"],
-            "/proc/net/arp":    ["read"],
-            "/proc/net/dev":    ["read"],
-            "/bin/sh":          ["exec"],
-            "/bin/ls":          ["exec"],
-            "/bin/cat":         ["exec"],
-            "/sbin/logread":    ["exec"]
-          }
-        },
-        "write": {
-          "ubus": { "*": ["*"] },
-          "uci":  { "*": ["read", "write"] },
-          "file": {
-            "/bin/sh":                 ["exec"],
-            "/etc/init.d/firewall":    ["exec"],
-            "/etc/init.d/rpcd":        ["exec"],
-            "/sbin/iptables":          ["exec"],
-            "/usr/sbin/iptables":      ["exec"]
-          }
-        }
-      }
-    }, null, 2);
+    // ACL 内容：root 用户拥有全部权限
+    const aclJson = '{"root":{"read":{"ubus":{"*":["*"]},"uci":{"*":["read"]},"file":{"*":["read","exec"]}},"write":{"ubus":{"*":["*"]},"uci":{"*":["read","write"]},"file":{"*":["read","write","exec"]}}}}';
 
+    // 方法1：file.write（已有权限时）
     try {
-      // 写 ACL 文件
       await this.call('file', 'write', {
         path: '/usr/share/rpcd/acl.d/owm.json',
-        data: aclContent
+        data: aclJson
       });
-      // 重启 rpcd 使权限生效
       await this.call('file', 'exec', {
-        command: '/etc/init.d/rpcd',
-        args: ['restart']
+        command: '/bin/sh',
+        args: ['-c', '/etc/init.d/rpcd restart']
       });
-      return { success: true };
-    } catch(e) {
-      return { success: false, error: e.message };
-    }
+      return { success: true, method: 'file.write' };
+    } catch {}
+
+    // 方法2：通过 ubus sys call（某些版本有此接口）
+    try {
+      await this.call('file', 'exec', {
+        command: '/bin/sh',
+        args: ['-c',
+          `echo '${aclJson}' > /usr/share/rpcd/acl.d/owm.json && /etc/init.d/rpcd restart`
+        ]
+      });
+      return { success: true, method: 'file.exec' };
+    } catch {}
+
+    // 方法3：luci-rpc setPassword 等其他接口
+    // 所有方法都失败，需要用户手动执行
+    return { success: false, error: 'no_permission' };
   }
 
   // 检测 ACL 权限是否已配置（测试读 /proc/net/arp）
