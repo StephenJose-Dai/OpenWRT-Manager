@@ -130,23 +130,25 @@ function TitleBar({ version, onAbout, onUpdate, transparent = false, onBack = nu
 
 // ── 快速连接弹窗 ──────────────────────────────────────────
 function QuickConnectModal({ host, port: initPort = 80, https: initHttps = false, onConnect, onClose }) {
-  const [proto,   setProto]   = useState('http')
-  const [port,    setPort]    = useState(80)
-  const [user,    setUser]    = useState('root')
-  const [pass,    setPass]    = useState('')
-  const [showPwd, setShowPwd] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
+  const [proto,      setProto]      = useState(initHttps ? 'https' : 'http')
+  const [port,       setPort]       = useState(initPort || (initHttps ? 443 : 80))
+  const [user,       setUser]       = useState('root')
+  const [pass,       setPass]       = useState('')
+  const [showPwd,    setShowPwd]    = useState(false)
+  const [ignoreSSL,  setIgnoreSSL]  = useState(initHttps) // HTTPS 时默认忽略证书
+  const [loading,    setLoading]    = useState(false)
+  const [error,      setError]      = useState('')
 
-  const handleProto = p => { setProto(p); setPort(p==='https'?443:80) }
+  const handleProto = p => { setProto(p); setPort(p==='https'?443:80); setIgnoreSSL(p==='https') }
 
   const connect = async () => {
     if (!pass) { setError('请输入密码'); return }
     setLoading(true); setError('')
     try {
-      const client = new OpenWrtClient({ host, port:+port, https:proto==='https', username:user, password:pass, fetcher:window.fetch.bind(window) })
+      window.electron?.setSSLIgnore?.(ignoreSSL)
+      const client = new OpenWrtClient({ host, port:+port, https:proto==='https', ignoreSSL, username:user, password:pass, fetcher:window.fetch.bind(window) })
       await client.login()
-      onConnect(client, { host, port:+port, https:proto==='https', username:user, password:pass })
+      onConnect(client, { host, port:+port, https:proto==='https', ignoreSSL, username:user, password:pass })
     } catch(e) { setError(e.message||'连接失败') }
     setLoading(false)
   }
@@ -179,6 +181,23 @@ function QuickConnectModal({ host, port: initPort = 80, https: initHttps = false
               {showPwd?'隐藏':'显示'}
             </button>
           </div>
+          {/* HTTPS 时显示忽略SSL开关 */}
+          {proto==='https' && (
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+              background:'#1a2332',border:'1px solid #2d3748',borderRadius:8,
+              padding:'8px 12px',marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:500}}>忽略 SSL 证书错误</div>
+                <div style={{fontSize:11,color:'var(--muted)'}}>自签名证书时开启</div>
+              </div>
+              <label style={{position:'relative',display:'inline-block',width:40,height:22,cursor:'pointer',flexShrink:0}}>
+                <input type="checkbox" checked={ignoreSSL} onChange={e=>setIgnoreSSL(e.target.checked)} style={{opacity:0,width:0,height:0}}/>
+                <span style={{position:'absolute',inset:0,borderRadius:11,background:ignoreSSL?'#f59e0b':'#30363d',transition:'.25s'}}>
+                  <span style={{position:'absolute',width:16,height:16,borderRadius:'50%',background:'#fff',top:3,left:ignoreSSL?21:3,transition:'.25s'}}/>
+                </span>
+              </label>
+            </div>
+          )}
           <div style={{display:'flex',gap:8}}>
             <button onClick={onClose} className="btn-ghost" style={{flex:1}}>取消</button>
             <button onClick={connect} className="btn-primary" style={{flex:2}} disabled={loading}>
@@ -266,7 +285,7 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
     setTesting(true); setTestResult('')
     window.electron?.setSSLIgnore?.(ignoreSSL)
     try {
-      const c = new OpenWrtClient({host,port:+port,https:proto==='https',username,password,fetcher:window.fetch.bind(window)})
+      const c = new OpenWrtClient({host,port:+port,https:proto==='https',ignoreSSL,username,password,fetcher:window.fetch.bind(window)})
       await c.login(); setTestResult('ok')
     } catch(e) { setTestResult('fail:' + (() => {
         const m = e.message||'连接失败';
@@ -292,7 +311,8 @@ function AddForm({ prefillHost, onSaved, onCancel }) {
     setSaving(true)
     window.electron?.setSSLIgnore?.(ignoreSSL)
     try {
-      const c = new OpenWrtClient({host,port:+port,https:proto==='https',username,password,fetcher:window.fetch.bind(window)})
+      window.electron?.setSSLIgnore?.(ignoreSSL)
+      const c = new OpenWrtClient({host,port:+port,https:proto==='https',ignoreSSL,username,password,fetcher:window.fetch.bind(window)})
       await c.login()
       const id = await mgr.addRouter({label:label||host,host,port:+port,https:proto==='https',username,password:rememberPwd?password:'',rememberPassword:rememberPwd,autoLogin})
       onSaved(id, {password, autoLogin})
