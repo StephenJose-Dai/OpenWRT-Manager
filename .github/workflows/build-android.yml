@@ -62,14 +62,18 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
       - name: Restore signing keystore
-        if: ${{ env.BUILD_TYPE == 'release' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d \
-            > mobile/android/app/release.keystore
-          echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
+      - name: Restore signing keystore
+        if: env.BUILD_TYPE == 'release'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "未配置 ANDROID_KEYSTORE_BASE64，跳过签名"
+          else
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > mobile/android/app/release.keystore
+            echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
+            echo "✓ Keystore 已恢复"
+          fi
       - name: Append gradle.properties
         working-directory: mobile/android
         run: |
@@ -93,13 +97,17 @@ jobs:
 
       - name: Build APKs
         working-directory: mobile/android
+        env:
+          KEY_ALIAS:      ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD:   ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
         run: |
           SIGNING_ARGS=""
-          if [ "${{ env.HAS_KEYSTORE }}" = "true" ]; then
+          if [ "$HAS_KEYSTORE" = "true" ]; then
             SIGNING_ARGS="-PkeystoreFile=$(pwd)/app/release.keystore \
-              -PkeyAlias=${{ secrets.ANDROID_KEY_ALIAS }} \
-              -PkeyPassword=${{ secrets.ANDROID_KEY_PASSWORD }} \
-              -PstorePassword=${{ secrets.ANDROID_STORE_PASSWORD }}"
+              -PkeyAlias=$KEY_ALIAS \
+              -PkeyPassword=$KEY_PASSWORD \
+              -PstorePassword=$STORE_PASSWORD"
           fi
 
           if [ "${{ env.BUILD_TYPE }}" = "release" ]; then
