@@ -112,8 +112,7 @@ jobs:
           ./gradlew assembleDebug \
             -PversionName="${{ env.APP_VERSION }}" \
             -PversionCode="${{ github.run_number }}" \
-            -PenableSeparateBuildPerCPUArchitecture=true \
-            -PuniversalApk=true
+            -PenableSeparateBuildPerCPUArchitecture=true
 
       - name: Build APKs (release)
         if: env.BUILD_TYPE == 'release'
@@ -134,7 +133,6 @@ jobs:
             -PversionName="${{ env.APP_VERSION }}" \
             -PversionCode="${{ github.run_number }}" \
             -PenableSeparateBuildPerCPUArchitecture=true \
-            -PuniversalApk=true \
             $SIGN
 
       - name: Collect APKs
@@ -148,8 +146,13 @@ jobs:
             src="${SRC}/app-${abi}-${TYPE}.apk"
             [ -f "$src" ] && cp "$src" "apks/OpenWrtManager-${VER}-android-${ABI_NAMES[$abi]}-${TYPE}.apk"
           done
-          for candidate in "${SRC}/app-universal-${TYPE}.apk" "${SRC}/app-${TYPE}.apk"; do
-            [ -f "$candidate" ] && cp "$candidate" "apks/OpenWrtManager-${VER}-android-universal-${TYPE}.apk" && break
+          # Universal APK（如果存在）
+          for candidate in             "${SRC}/app-universal-${TYPE}.apk"             "${SRC}/app-${TYPE}.apk"; do
+            if [ -f "$candidate" ]; then
+              cp "$candidate" "apks/OpenWrtManager-${VER}-android-universal-${TYPE}.apk"
+              echo "✓ universal APK collected"
+              break
+            fi
           done
           ls -lh apks/
 
