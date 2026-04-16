@@ -3,13 +3,15 @@ import React, { useState } from 'react'
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Alert, RefreshControl, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAppStore } from '../store'
+import { useTablet } from '../hooks/useTablet'
 import { usePolling } from '../hooks/usePolling'
 
 const C = { bg:'#0d1117', bg2:'#161b22', border:'#30363d', text:'#e6edf3', muted:'#8b949e', blue:'#4f8ef7', red:'#f85149' }
 
 export default function DevicesScreen() {
   const { client, devices, setDevices } = useAppStore()
-  const [search,    setSearch]    = useState('')
+  const [search, setSearch] = useState('')
+  const { isTablet, contentWidth } = useTablet()
   const [kicking,   setKicking]   = useState(null)
   const [refreshing,setRefreshing]= useState(false)
 
@@ -45,7 +47,9 @@ export default function DevicesScreen() {
       </View>
       <FlatList
         data={filtered}
-        keyExtractor={d => d.mac}
+        keyExtractor={d => d.mac || d.ip}
+        numColumns={isTablet ? 2 : 1}
+        key={isTablet ? 'tablet' : 'phone'}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async()=>{setRefreshing(true);await fetch();setRefreshing(false)}} tintColor={C.blue}/>}
         ListHeaderComponent={<Text style={s.count}>在线设备 {devices.length} 台</Text>}
         ListEmptyComponent={<Text style={s.empty}>暂无设备</Text>}

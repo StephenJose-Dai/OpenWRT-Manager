@@ -5,12 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAppStore } from '../store'
 import { usePolling } from '../hooks/usePolling'
 import { routerManager, OpenWrtClient } from '../services/openwrt'
+import { useTablet } from '../hooks/useTablet'
 
 const C = { bg:'#0d1117', bg2:'#161b22', bg3:'#21262d', border:'#30363d', text:'#e6edf3', muted:'#8b949e', blue:'#4f8ef7', green:'#22c55e', red:'#f85149', yellow:'#f59e0b' }
 
 export default function DashboardScreen({ navigation }) {
   const { client, config, online, sysInfo, interfaces, setSysInfo, setInterfaces, setOnline, disconnect } = useAppStore()
   const [refreshing, setRefreshing] = useState(false)
+  const { isTablet } = useTablet()
   const [showSwitcher, setShowSwitcher] = useState(false)
   const [routers, setRouters] = useState([])
 
@@ -125,6 +127,7 @@ export default function DashboardScreen({ navigation }) {
   )
 }
 
+// Tablet: info cards side by side
 const s = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: C.bg },
   scroll:  { flex: 1, padding: 16 },

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Modal, TextInput, Switch } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { routerManager, scanLAN, OpenWrtClient } from '../services/openwrt'
+import { useTablet } from '../hooks/useTablet'
 import { useAppStore } from '../store'
 
 const C = { bg:'#0d1117', bg2:'#161b22', bg3:'#21262d', border:'#30363d', text:'#e6edf3', muted:'#8b949e', blue:'#4f8ef7', green:'#22c55e', red:'#f85149', yellow:'#f59e0b' }
@@ -11,7 +12,8 @@ export default function IndexScreen({ navigation }) {
   const [found,      setFound]      = useState([])
   const [scanning,   setScanning]   = useState(false)
   const [loading,    setLoading]    = useState(null)
-  const [quickConn,  setQuickConn]  = useState(null) // { host, port, https, isOpenWrt }
+  const [quickConn,  setQuickConn]  = useState(null)
+  const { isTablet, width } = useTablet() // { host, port, https, isOpenWrt }
   const [qcPwd,      setQcPwd]      = useState('')
   const [qcProto,    setQcProto]    = useState('http')
   const [qcPort,     setQcPort]     = useState('80')
@@ -109,8 +111,9 @@ export default function IndexScreen({ navigation }) {
         {routers.length > 0 && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>已保存的路由器</Text>
+            <View style={isTablet ? {flexDirection:'row',flexWrap:'wrap',gap:10} : null}>
             {routers.map(r => (
-              <TouchableOpacity key={r.id} style={[s.card, loading===r.id && s.cardActive]}
+              <TouchableOpacity key={r.id} style={{flex: isTablet ? undefined : undefined, width: isTablet ? (width-220-60)/2 : undefined}} style={[s.card, loading===r.id && s.cardActive]}
                 onPress={() => handleRouterPress(r)} onLongPress={() => handleDelete(r.id)}>
                 <View style={s.cardIcon}><Text style={s.cardIconText}>⊞</Text></View>
                 <View style={s.cardBody}>
@@ -126,6 +129,7 @@ export default function IndexScreen({ navigation }) {
                 {loading===r.id ? <ActivityIndicator color={C.blue}/> : <Text style={s.arrow}>→</Text>}
               </TouchableOpacity>
             ))}
+            </View>
             <TouchableOpacity style={s.addMore} onPress={() => navigation.navigate('Add')}>
               <Text style={s.addMoreText}>＋ 添加路由器</Text>
             </TouchableOpacity>
