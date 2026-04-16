@@ -46,9 +46,17 @@ jobs:
           restore-keys: nm-android-
 
       - name: npm install
-        if: steps.nm-cache.outputs.cache-hit != 'true'
         working-directory: mobile
-        run: npm install --legacy-peer-deps
+        run: |
+          # 无论 cache 是否命中都执行，确保 node_modules 完整
+          # cache 命中时用 --prefer-offline 跳过网络请求，速度快
+          if [ "${{ steps.nm-cache.outputs.cache-hit }}" = "true" ]; then
+            npm install --legacy-peer-deps --prefer-offline
+          else
+            npm install --legacy-peer-deps
+          fi
+          # 确认关键的 gradle 插件存在
+          ls node_modules/@react-native/gradle-plugin/ || (echo "MISSING gradle-plugin" && exit 1)
 
       - uses: android-actions/setup-android@v3
 
@@ -90,6 +98,12 @@ jobs:
             --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
+
+      - name: Verify node_modules for gradle
+        run: |
+          echo "Checking gradle plugin path..."
+          ls mobile/node_modules/@react-native/gradle-plugin/ 2>/dev/null             && echo "✓ gradle-plugin found"             || (echo "❌ MISSING: mobile/node_modules/@react-native/gradle-plugin" && exit 1)
+          ls mobile/node_modules/@react-native-community/cli-platform-android/ 2>/dev/null             && echo "✓ cli-platform-android found"             || echo "⚠ cli-platform-android not found (may be ok)"
 
       - name: Build APKs (debug)
         if: env.BUILD_TYPE == 'debug'

@@ -1,71 +1,54 @@
-// mobile/android/app/build.gradle
 apply plugin: "com.android.application"
 apply plugin: "com.facebook.react"
 
-// ── 读取签名配置（支持环境变量和 gradle.properties 两种方式）─
-def keystoreFile     = System.getenv("KEYSTORE_FILE")      ?: project.findProperty("keystoreFile")     ?: ""
-def keyAlias         = System.getenv("ANDROID_KEY_ALIAS")  ?: project.findProperty("keyAlias")         ?: ""
-def keyPassword      = System.getenv("ANDROID_KEY_PASSWORD")?: project.findProperty("keyPassword")      ?: ""
-def storePassword    = System.getenv("ANDROID_STORE_PASSWORD")?: project.findProperty("storePassword")   ?: ""
+def keystoreFile  = project.findProperty("keystoreFile")  ?: ""
+def keyAlias      = project.findProperty("keyAlias")      ?: ""
+def keyPassword   = project.findProperty("keyPassword")   ?: ""
+def storePassword = project.findProperty("storePassword") ?: ""
 def hasSigningConfig = keystoreFile && keyAlias && keyPassword && storePassword
-
-// ── ABI versionCode 偏移（确保各架构包的版本码唯一）─────────
-def abiVersionCodes = [
-    "armeabi-v7a": 1,
-    "arm64-v8a":   2,
-    "x86":         3,
-    "x86_64":      4
-]
 
 android {
     namespace "com.openwrtmanager"
-    compileSdk 34
-    ndkVersion "26.1.10909125"
+    compileSdk rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    ndkVersion rootProject.ext.ndkVersion
 
     defaultConfig {
         applicationId "com.openwrtmanager"
-        minSdk 21           // Android 5.0，覆盖绝大多数在役设备
-        targetSdk 34
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
         versionCode (project.findProperty("versionCode") as Integer) ?: 1
         versionName project.findProperty("versionName") ?: "1.0.0"
-
-        // 网络安全配置（允许局域网 HTTP 直连）
-        manifestPlaceholders = [usesCleartextTraffic: "true"]
     }
 
-    // ── 签名配置 ─────────────────────────────────────────
     signingConfigs {
+        debug {
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
         release {
             if (hasSigningConfig) {
-                storeFile     file(keystoreFile)
+                storeFile file(keystoreFile)
                 storePassword storePassword
-                keyAlias      keyAlias
-                keyPassword   keyPassword
+                keyAlias keyAlias
+                keyPassword keyPassword
             }
         }
-        debug {
-            storeFile     file("debug.keystore")
-            storePassword "android"
-            keyAlias      "androiddebugkey"
-            keyPassword   "android"
-        }
     }
 
-    // ── 构建类型 ─────────────────────────────────────────
     buildTypes {
-        release {
-            signingConfig    hasSigningConfig ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled    true
-            shrinkResources  true
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-        }
         debug {
             signingConfig signingConfigs.debug
-            minifyEnabled false
+        }
+        release {
+            signingConfig hasSigningConfig ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 
-    // ── ABI 分包：为每种架构输出独立 APK ─────────────────
     splits {
         abi {
             reset()
@@ -74,40 +57,15 @@ android {
             include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
     }
-
-    // 为每个 ABI 生成唯一 versionCode
-    applicationVariants.all { variant ->
-        variant.outputs.each { output ->
-            def abi = output.getFilter(com.android.build.OutputFile.ABI)
-            if (abi != null) {
-                def baseCode = variant.versionCode
-                output.versionCodeOverride = baseCode * 10 + (abiVersionCodes[abi] ?: 0)
-            }
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    // 允许局域网 HTTP（ubus 直连）
-    android {
-        useLibrary 'org.apache.http.legacy'
-    }
-}
-
-// ── 依赖 ──────────────────────────────────────────────────
-dependencies {
-    implementation("com.facebook.react:react-android")
-    implementation("com.facebook.react:hermes-android")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 }
 
 react {
-    // 使用默认配置，React Native 0.73 会自动找到 index.js
     hermesEnabled = true
-    enableProguardInReleaseBuilds = true
 }
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+}
+
+apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
