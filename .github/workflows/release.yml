@@ -173,6 +173,7 @@ jobs:
     needs: prepare
     name: Android APK — ${{ matrix.build_type }}
     runs-on: ubuntu-latest
+    environment: OPAndroid   # 读取 OPAndroid 环境下的签名 secrets
     strategy:
       fail-fast: false
       matrix:

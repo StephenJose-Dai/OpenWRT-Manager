@@ -23,6 +23,7 @@ jobs:
   build:
     name: Android APK (${{ inputs.build_type || 'release' }})
     runs-on: ubuntu-latest
+    environment: OPAndroid   # 读取 OPAndroid 环境下的 secrets
 
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +68,17 @@ jobs:
 
       - name: Make gradlew executable
         run: chmod +x mobile/android/gradlew
+
+      - name: Generate debug keystore
+        working-directory: mobile/android/app
+        run: |
+          # debug.keystore 在 .gitignore 里，需要在 CI 里生成
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair               -v               -storetype PKCS12               -keystore debug.keystore               -alias androiddebugkey               -keyalg RSA               -keysize 2048               -validity 10000               -storepass android               -keypass android               -dname "CN=Android Debug,O=Android,C=US"
+            echo "✓ debug.keystore generated"
+          else
+            echo "✓ debug.keystore already exists"
+          fi
 
       - name: Restore signing keystore
         if: env.BUILD_TYPE == 'release'

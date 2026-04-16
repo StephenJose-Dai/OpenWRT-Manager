@@ -23,7 +23,9 @@ mobile/ios/Pods/
 mobile/ios/DerivedData/
 
 # ── 签名密钥（绝对不要提交！）────────────────────────────
-*.keystore
+# debug.keystore 提交到仓库（不含敏感信息），release.keystore 不提交
+mobile/android/app/release.keystore
+!mobile/android/app/debug.keystore
 *.jks
 *.p12
 *.cer
