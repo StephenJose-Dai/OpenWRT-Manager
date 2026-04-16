@@ -1,34 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  network_security_config.xml
-  允许对局域网地址（192.168.x.x / 10.x.x.x 等）发起 HTTP 明文请求
-  用于 ubus 直连（路由器通常只有 HTTP，不是 HTTPS）
+  允许：
+  1. 所有 HTTP 明文请求（局域网路由器）
+  2. 自签名/过期 HTTPS 证书（路由器自签名证书）
+  3. 用户安装的证书
 -->
 <network-security-config>
-    <!-- 局域网地址允许明文 HTTP -->
-    <domain-config cleartextTrafficPermitted="true">
-        <!-- 常见家庭网关地址段 -->
-        <domain includeSubdomains="false">192.168.1.1</domain>
-        <domain includeSubdomains="false">192.168.0.1</domain>
-        <domain includeSubdomains="false">192.168.2.1</domain>
-        <domain includeSubdomains="false">192.168.31.1</domain>
-        <domain includeSubdomains="false">192.168.100.1</domain>
-        <domain includeSubdomains="false">10.0.0.1</domain>
-        <domain includeSubdomains="false">10.0.1.1</domain>
-        <domain includeSubdomains="false">openwrt.lan</domain>
-        <domain includeSubdomains="false">router.lan</domain>
-    </domain-config>
-
-    <!--
-      公网地址（用户自定义 IP）也允许 HTTP
-      如果路由器暴露了公网 HTTP 端口，需要这里放行
-      生产环境建议用户配置 HTTPS + 证书
-    -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
+            <!-- 系统证书 -->
             <certificates src="system" />
-            <!-- 如果用户有自签名证书，可在此处添加 user 信任锚 -->
-            <!-- <certificates src="user" /> -->
+            <!-- 用户安装的证书 -->
+            <certificates src="user" />
         </trust-anchors>
     </base-config>
+    <!-- debug 版额外信任所有证书 -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
 </network-security-config>
