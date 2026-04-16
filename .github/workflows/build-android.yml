@@ -21,27 +21,24 @@ env:
 
 jobs:
   build:
-    name: Android APK (全架构)
+    name: Android APK (${{ inputs.build_type || 'release' }})
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: temurin
           cache: gradle
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: ''          # 手动管理，避免 lock 文件问题
+          cache: ''
 
-      - name: Cache node_modules
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         id: nm-cache
         with:
           path: mobile/node_modules
@@ -53,15 +50,13 @@ jobs:
         working-directory: mobile
         run: npm install --legacy-peer-deps
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
 
       - name: Install NDK 26
         run: |
           sdkmanager "ndk;26.1.10909125"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
-      - name: Restore signing keystore
       - name: Restore signing keystore
         if: env.BUILD_TYPE == 'release'
         env:
@@ -74,15 +69,14 @@ jobs:
             echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
             echo "✓ Keystore 已恢复"
           fi
-      - name: Append gradle.properties
+
+      - name: Patch gradle.properties
         working-directory: mobile/android
         run: |
-          cat >> gradle.properties << 'EOF'
-          reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
-          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m
-          org.gradle.parallel=true
-          org.gradle.caching=true
-          EOF
+          echo "reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64" >> gradle.properties
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m"    >> gradle.properties
+          echo "org.gradle.parallel=true"                                   >> gradle.properties
+          echo "org.gradle.caching=true"                                    >> gradle.properties
 
       - name: Bundle JS assets
         working-directory: mobile
@@ -90,40 +84,44 @@ jobs:
           mkdir -p android/app/src/main/assets
           npx react-native bundle \
             --platform android \
-            --dev false \
+            --dev ${{ env.BUILD_TYPE == 'debug' && 'true' || 'false' }} \
             --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
 
-      - name: Build APKs
+      - name: Build APKs (debug)
+        if: env.BUILD_TYPE == 'debug'
+        working-directory: mobile/android
+        run: |
+          ./gradlew assembleDebug \
+            -PversionName="${{ env.APP_VERSION }}" \
+            -PversionCode="${{ github.run_number }}" \
+            -PenableSeparateBuildPerCPUArchitecture=true \
+            -PuniversalApk=true
+
+      - name: Build APKs (release)
+        if: env.BUILD_TYPE == 'release'
         working-directory: mobile/android
         env:
           KEY_ALIAS:      ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD:   ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
         run: |
-          SIGNING_ARGS=""
+          SIGN=""
           if [ "$HAS_KEYSTORE" = "true" ]; then
-            SIGNING_ARGS="-PkeystoreFile=$(pwd)/app/release.keystore \
+            SIGN="-PkeystoreFile=$(pwd)/app/release.keystore \
               -PkeyAlias=$KEY_ALIAS \
               -PkeyPassword=$KEY_PASSWORD \
               -PstorePassword=$STORE_PASSWORD"
           fi
+          ./gradlew assembleRelease \
+            -PversionName="${{ env.APP_VERSION }}" \
+            -PversionCode="${{ github.run_number }}" \
+            -PenableSeparateBuildPerCPUArchitecture=true \
+            -PuniversalApk=true \
+            $SIGN
 
-          if [ "${{ env.BUILD_TYPE }}" = "release" ]; then
-            ./gradlew assembleRelease \
-              -PversionName="${{ env.APP_VERSION }}" \
-              -PversionCode="${{ github.run_number }}" \
-              -PenableSeparateBuildPerCPUArchitecture=true \
-              -PuniversalApk=true \
-              $SIGNING_ARGS
-          else
-            ./gradlew assembleDebug \
-              -PversionName="${{ env.APP_VERSION }}" \
-              -PversionCode="${{ github.run_number }}"
-          fi
-
-      - name: Collect and rename APKs
+      - name: Collect APKs
         run: |
           VER="${{ env.APP_VERSION }}"
           TYPE="${{ env.BUILD_TYPE }}"
@@ -136,69 +134,30 @@ jobs:
             ["x86"]="x86"
             ["x86_64"]="x86_64"
           )
-
           for abi in armeabi-v7a arm64-v8a x86 x86_64; do
             src="${SRC}/app-${abi}-${TYPE}.apk"
-            if [ -f "$src" ]; then
-              name="${ABI_NAMES[$abi]}"
-              cp "$src" "apks/OpenWrtManager-${VER}-android-${name}.apk"
-              echo "✓ android-${name}: $(du -sh apks/OpenWrtManager-${VER}-android-${name}.apk | cut -f1)"
-            fi
+            [ -f "$src" ] && cp "$src" "apks/OpenWrtManager-${VER}-android-${ABI_NAMES[$abi]}-${TYPE}.apk"
           done
-
-          # Universal APK（尝试多个可能的文件名）
-          for candidate in \
-            "${SRC}/app-universal-${TYPE}.apk" \
-            "${SRC}/app-${TYPE}.apk"; do
-            if [ -f "$candidate" ]; then
-              cp "$candidate" "apks/OpenWrtManager-${VER}-android-universal.apk"
-              echo "✓ android-universal: $(du -sh apks/OpenWrtManager-${VER}-android-universal.apk | cut -f1)"
-              break
-            fi
+          for candidate in "${SRC}/app-universal-${TYPE}.apk" "${SRC}/app-${TYPE}.apk"; do
+            [ -f "$candidate" ] && cp "$candidate" "apks/OpenWrtManager-${VER}-android-universal-${TYPE}.apk" && break
           done
-
-          echo "=== 最终产物 ==="
           ls -lh apks/
-
-      - name: Build summary
-        run: |
-          echo "## Android 构建结果 — ${{ env.APP_VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| 文件 | 大小 | 适用设备 |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|------|---------|" >> $GITHUB_STEP_SUMMARY
-          for f in apks/*.apk; do
-            sz=$(du -h "$f" | cut -f1)
-            nm=$(basename "$f")
-            case "$nm" in
-              *arm64*)    desc="主流 Android 手机（ARM64，推荐）" ;;
-              *armv7*)    desc="老款 Android 手机（ARMv7）" ;;
-              *x86_64*)   desc="x86_64 平板/模拟器" ;;
-              *x86*)      desc="x86 模拟器" ;;
-              *universal*)desc="通用包（所有架构）" ;;
-              *)          desc="—" ;;
-            esac
-            echo "| \`$nm\` | $sz | $desc |" >> $GITHUB_STEP_SUMMARY
-          done
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-apks
+          name: android-apks-${{ env.BUILD_TYPE }}
           path: apks/*.apk
           retention-days: 7
           if-no-files-found: error
 
-  # ══════════════════════════════════════════════════════════
-  # Release
-  # ══════════════════════════════════════════════════════════
   release:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: android-apks
+          name: android-apks-${{ env.BUILD_TYPE }}
           path: files
 
       - uses: softprops/action-gh-release@v2
@@ -207,18 +166,6 @@ jobs:
           name: "OpenWrt Manager ${{ github.ref_name }}"
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
           append_body: true
-          body: |
-            ## Android 下载
-
-            | 文件 | 适用设备 |
-            |------|---------|
-            | `*-android-arm64.apk` | 主流 Android 手机（ARM64）✅ 推荐 |
-            | `*-android-armv7.apk` | 老款 Android 手机（ARMv7）|
-            | `*-android-x86_64.apk` | x86_64 平板/模拟器 |
-            | `*-android-x86.apk` | x86 模拟器 |
-            | `*-android-universal.apk` | 通用包（不确定时选此）|
-
-            > 安装前在手机设置中开启「允许未知来源安装」
           files: files/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
