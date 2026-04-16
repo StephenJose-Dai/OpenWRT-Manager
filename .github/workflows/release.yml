@@ -82,9 +82,9 @@ jobs:
         run: npx electron-builder --win nsis portable --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # release 版本用代码签名证书（可选，没有也能打包，只是没有数字签名）
-          WIN_CSC_LINK:     ${{ matrix.build_type == 'release' && secrets.WIN_CSC_LINK || '' }}
-          WIN_CSC_KEY_PASSWORD: ${{ matrix.build_type == 'release' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+          # 签名证书：直接传入，为空时 electron-builder 自动跳过签名（debug 版无证书也正常）
+          WIN_CSC_LINK:         ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       - name: Rename
         shell: pwsh
         working-directory: desktop/dist-electron
@@ -150,8 +150,8 @@ jobs:
         run: npx electron-builder --win nsis --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WIN_CSC_LINK:         ${{ matrix.build_type == 'release' && secrets.WIN_CSC_LINK || '' }}
-          WIN_CSC_KEY_PASSWORD: ${{ matrix.build_type == 'release' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+          WIN_CSC_LINK:         ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       - name: Rename
         shell: pwsh
         working-directory: desktop/dist-electron
