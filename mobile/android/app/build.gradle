@@ -1,11 +1,12 @@
 apply plugin: "com.android.application"
 apply plugin: "com.facebook.react"
 
-def keystoreFile  = project.findProperty("keystoreFile")  ?: ""
-def keyAlias      = project.findProperty("keyAlias")      ?: ""
-def keyPassword   = project.findProperty("keyPassword")   ?: ""
-def storePassword = project.findProperty("storePassword") ?: ""
-def hasSigningConfig = keystoreFile && keyAlias && keyPassword && storePassword
+// 签名配置（通过 gradle -P 参数传入）
+def ksFile      = project.findProperty("keystoreFile")  ?: ""
+def ksAlias     = project.findProperty("keyAlias")      ?: ""
+def ksKeyPwd    = project.findProperty("keyPassword")   ?: ""
+def ksStorePwd  = project.findProperty("storePassword") ?: ""
+def hasSigning  = ksFile && ksAlias && ksKeyPwd && ksStorePwd
 
 android {
     namespace "com.openwrtmanager"
@@ -23,17 +24,17 @@ android {
 
     signingConfigs {
         debug {
-            storeFile file("debug.keystore")
+            storeFile     file("debug.keystore")
             storePassword "android"
-            keyAlias "androiddebugkey"
-            keyPassword "android"
+            keyAlias      "androiddebugkey"
+            keyPassword   "android"
         }
         release {
-            if (hasSigningConfig) {
-                storeFile file(keystoreFile)
-                storePassword storePassword
-                keyAlias keyAlias
-                keyPassword keyPassword
+            if (hasSigning) {
+                storeFile     file(ksFile)
+                storePassword ksStorePwd
+                keyAlias      ksAlias
+                keyPassword   ksKeyPwd
             }
         }
     }
@@ -43,18 +44,18 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig hasSigningConfig ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled true
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            signingConfig  hasSigning ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled  true
+            proguardFiles  getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 
     splits {
         abi {
             reset()
-            enable true
+            enable       true
             universalApk (project.findProperty("universalApk") ?: "false").toBoolean()
-            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            include      "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
     }
 }
