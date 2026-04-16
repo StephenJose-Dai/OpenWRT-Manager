@@ -22,15 +22,20 @@ export default function TrafficScreen() {
   const poll = async () => {
     if (!client) return
     try {
-      const list  = await client.getNetworkInterfaces()
-      const iface = list.find(i => i.name === activeIface) || list[0]
-      if (!iface) return
-      const now = { rx: iface.rxBytes, tx: iface.txBytes, ts: Date.now() }
+      // 用 /proc/net/dev 获取精确流量数据
+      const stats = await client.getNetworkStats()
+      const keys = Object.keys(stats).filter(k => k !== 'lo')
+      const wanKey = keys.find(k => k === activeIface || k.includes('wan') || k === 'pppoe-wan')
+        || keys.reduce((a, b) => ((stats[a]?.rxBytes||0) + (stats[a]?.txBytes||0)) > ((stats[b]?.rxBytes||0) + (stats[b]?.txBytes||0)) ? a : b, keys[0])
+      if (!wanKey || !stats[wanKey]) return
+      const now = { rx: stats[wanKey].rxBytes, tx: stats[wanKey].txBytes, ts: Date.now() }
       let rxRate = 0, txRate = 0
       if (prev.current) {
         const dt = (now.ts - prev.current.ts) / 1000
-        rxRate = Math.max(0, (now.rx - prev.current.rx) / dt)
-        txRate = Math.max(0, (now.tx - prev.current.tx) / dt)
+        if (dt > 0) {
+          rxRate = Math.max(0, (now.rx - prev.current.rx) / dt)
+          txRate = Math.max(0, (now.tx - prev.current.tx) / dt)
+        }
       }
       prev.current = now
       addTrafficSnapshot({ rx: rxRate, tx: txRate, ts: now.ts })

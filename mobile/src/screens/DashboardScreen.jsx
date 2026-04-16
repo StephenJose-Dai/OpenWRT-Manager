@@ -37,8 +37,13 @@ export default function DashboardScreen({ navigation }) {
     if (!cfg) return
     setShowSwitcher(false)
     try {
-      const newClient = new OpenWrtClient(cfg)
+      const newClient = new OpenWrtClient({
+        ...cfg,
+        https:     cfg.https || false,
+        ignoreSSL: cfg.ignoreSSL !== undefined ? cfg.ignoreSSL : (cfg.https || false)
+      })
       await newClient.login()
+      newClient.checkACL().then(ok => { if (!ok) newClient.setupACL().catch(() => {}) })
       useAppStore.getState().setConnection(newClient, cfg)
     } catch (e) { Alert.alert('切换失败', e.message) }
   }
