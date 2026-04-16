@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { StatusBar, StyleSheet, View } from 'react-native'
+import { StatusBar, StyleSheet, View, Text } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -52,20 +52,36 @@ function TabletLayout({ navigation }) {
 }
 
 // 手机专用：底部 Tab
+const TAB_ICONS = {
+  '控制台': { active: '🖥',  inactive: '🖥'  },
+  '设备':   { active: '📱',  inactive: '📱'  },
+  '流量':   { active: '📊',  inactive: '📊'  },
+  '防火墙': { active: '🛡',  inactive: '🛡'  },
+  '系统':   { active: '⚙️', inactive: '⚙️' },
+}
+
 function PhoneTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
           backgroundColor: COLORS.bg2,
           borderTopColor: COLORS.border,
-          height: 56,
+          height: 60,
+          paddingBottom: 6,
         },
         tabBarActiveTintColor:   COLORS.blue,
         tabBarInactiveTintColor: COLORS.muted,
-        tabBarLabelStyle: { fontSize: 11, marginBottom: 4 },
-      }}
+        tabBarLabelStyle: { fontSize: 11 },
+        tabBarIcon: ({ focused }) => {
+          const icons = TAB_ICONS[route.name]
+          const icon  = focused ? icons?.active : icons?.inactive
+          return (
+            <Text style={{ fontSize: 20, marginBottom: -2 }}>{icon}</Text>
+          )
+        },
+      })}
     >
       <Tab.Screen name="控制台"  component={DashboardScreen} />
       <Tab.Screen name="设备"    component={DevicesScreen} />
