@@ -42,7 +42,7 @@ jobs:
         id: nm-cache
         with:
           path: mobile/node_modules
-          key: nm-android-${{ hashFiles('mobile/package-lock.json') }}
+          key: nm-android-${{ hashFiles('mobile/package.json') }}
           restore-keys: nm-android-
 
       - name: npm install
