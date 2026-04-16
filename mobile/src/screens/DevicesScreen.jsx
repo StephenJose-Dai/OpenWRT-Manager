@@ -54,12 +54,14 @@ export default function DevicesScreen() {
         ListHeaderComponent={<Text style={s.count}>在线设备 {devices.length} 台</Text>}
         ListEmptyComponent={<Text style={s.empty}>暂无设备</Text>}
         renderItem={({ item: d }) => (
-          <View style={s.card}>
-            <View style={s.avatar}><Text style={s.avatarText}>{(d.hostname||d.ip).charAt(0).toUpperCase()}</Text></View>
+          <View style={[s.card, isTablet && s.cardTablet]}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>{(d.hostname||d.ip||'?').charAt(0).toUpperCase()}</Text>
+            </View>
             <View style={s.info}>
-              <Text style={s.name}>{d.hostname || '未知设备'}</Text>
-              <Text style={s.ip}>{d.ip}</Text>
-              <Text style={s.mac}>{d.mac}</Text>
+              <Text style={s.name} numberOfLines={1}>{d.hostname || '未知设备'}</Text>
+              <Text style={s.ip}>{d.ip || '--'}</Text>
+              <Text style={s.mac}>{d.mac || '--'}</Text>
             </View>
             <TouchableOpacity style={[s.kickBtn, kicking===d.mac&&s.dim]} disabled={kicking===d.mac} onPress={()=>kick(d.mac,d.hostname)}>
               {kicking===d.mac ? <ActivityIndicator color={C.red} size="small"/> : <Text style={s.kickText}>踢出</Text>}
@@ -87,5 +89,6 @@ const s = StyleSheet.create({
   mac:        { fontSize: 11, color: '#484f58', marginTop: 1, fontFamily: 'monospace' },
   kickBtn:    { backgroundColor: '#2a101022', borderWidth: 1, borderColor: '#f8514933', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   kickText:   { fontSize: 13, color: C.red },
+  cardTablet: { flex: 1, margin: 4 },
   dim:        { opacity: 0.5 },
 })

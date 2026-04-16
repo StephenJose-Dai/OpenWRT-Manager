@@ -62,7 +62,14 @@ Page({
         this._client.getSystemInfo(),
         this._client.getNetworkInterfaces()
       ]);
-      this.setData({ info, interfaces: ifaces, online: true, loading: false });
+      // 预处理流量数据（wxml 不支持 .toFixed()）
+      const fmtBytes = b => b > 1048576 ? (b/1048576).toFixed(1)+'MB' : b > 1024 ? (b/1024).toFixed(0)+'KB' : b+'B';
+      const interfaces = ifaces.map(i => ({
+        ...i,
+        rxFmt: i.rxBytes > 0 ? fmtBytes(i.rxBytes) : '--',
+        txFmt: i.txBytes > 0 ? fmtBytes(i.txBytes) : '--',
+      }));
+      this.setData({ info, interfaces, online: true, loading: false });
     } catch (err) {
       this.setData({ online: false, loading: false });
       if (err.code === 6) {

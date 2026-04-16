@@ -73,7 +73,9 @@ Page({
           txFmt: fmtSpeed(txRate)
         },
         totalRx: now.rx,
-        totalTx: now.tx
+        totalTx: now.tx,
+        totalRxFmt: now.rx > 1048576 ? (now.rx/1048576).toFixed(1)+' MB' : now.rx > 1024 ? (now.rx/1024).toFixed(0)+' KB' : '--',
+        totalTxFmt: now.tx > 1048576 ? (now.tx/1048576).toFixed(1)+' MB' : now.tx > 1024 ? (now.tx/1024).toFixed(0)+' KB' : '--'
       });
     } catch {}
   },

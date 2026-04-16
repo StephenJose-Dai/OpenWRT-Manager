@@ -42,11 +42,11 @@
   <view class="total-card">
     <view class="total-row">
       <text class="total-label">累计下载</text>
-      <text class="total-val rx">{{totalRx > 0 ? (totalRx / 1048576).toFixed(1) + ' MB' : '--'}}</text>
+      <text class="total-val rx">{{totalRxFmt}}</text>
     </view>
     <view class="total-row">
       <text class="total-label">累计上传</text>
-      <text class="total-val tx">{{totalTx > 0 ? (totalTx / 1048576).toFixed(1) + ' MB' : '--'}}</text>
+      <text class="total-val tx">{{totalTxFmt}}</text>
     </view>
   </view>
 

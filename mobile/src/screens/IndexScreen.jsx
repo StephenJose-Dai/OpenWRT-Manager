@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useFocusEffect } from '@react-navigation/native'
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Modal, TextInput, Switch } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { routerManager, scanLAN, OpenWrtClient } from '../services/openwrt'
@@ -22,15 +23,18 @@ export default function IndexScreen({ navigation }) {
   const [qcError,    setQcError]    = useState('')
   const setConnection = useAppStore(s => s.setConnection)
 
-  useEffect(() => {
+  // useFocusEffect 确保每次回到此页面都重新加载路由器列表
+  useFocusEffect(useCallback(() => {
     routerManager.load().then(() => {
       const list = routerManager.list()
       setRouters(list)
-      // 自动登录
-      const auto = list.find(r => r.autoLogin && r.rememberPassword && r.password)
-      if (auto) connect(auto)
+      // 自动登录（仅第一次）
+      if (list.length > 0 && routers.length === 0) {
+        const auto = list.find(r => r.autoLogin && r.rememberPassword && r.password)
+        if (auto) connect(auto)
+      }
     })
-  }, [])
+  }, []))
 
   const connect = useCallback(async (router) => {
     setLoading(router.id || 'new')
@@ -113,7 +117,7 @@ export default function IndexScreen({ navigation }) {
             <Text style={s.sectionTitle}>已保存的路由器</Text>
             <View style={isTablet ? {flexDirection:'row',flexWrap:'wrap',gap:10} : null}>
             {routers.map(r => (
-              <TouchableOpacity key={r.id} style={{flex: isTablet ? undefined : undefined, width: isTablet ? (width-220-60)/2 : undefined}} style={[s.card, loading===r.id && s.cardActive]}
+              <TouchableOpacity key={r.id} style={isTablet ? {width:'48%'} : null} style={[s.card, loading===r.id && s.cardActive]}
                 onPress={() => handleRouterPress(r)} onLongPress={() => handleDelete(r.id)}>
                 <View style={s.cardIcon}><Text style={s.cardIconText}>⊞</Text></View>
                 <View style={s.cardBody}>

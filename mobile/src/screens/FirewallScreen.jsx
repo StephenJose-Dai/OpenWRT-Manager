@@ -121,15 +121,19 @@ export default function FirewallScreen() {
             {rules.map((r, i) => (
               <View key={r['.name'] || i} style={s.card}>
                 <View style={s.cardHeader}>
-                  <Text style={s.cardName}>{r.name || r['.name'] || '未命名'}</Text>
-                  <View style={[s.badge, (r.target||'ACCEPT')==='ACCEPT' ? s.badgeGreen : s.badgeRed]}>
-                    <Text style={[s.badgeText, (r.target||'ACCEPT')==='ACCEPT' ? {color:'#4ade80'} : {color:'#f87171'}]}>{r.target||'ACCEPT'}</Text>
+                  <Text style={s.cardName} numberOfLines={1}>{r.name || r['.name'] || '未命名'}</Text>
+                  <View style={s.cardHeaderRight}>
+                    <View style={[s.badge, (r.target||'ACCEPT')==='ACCEPT' ? s.badgeGreen : s.badgeRed]}>
+                      <Text style={[s.badgeText, (r.target||'ACCEPT')==='ACCEPT' ? {color:'#4ade80'} : {color:'#f87171'}]}>{r.target||'ACCEPT'}</Text>
+                    </View>
+                    <TouchableOpacity style={s.deleteBtn} onPress={() => deleteRule(r)}>
+                      <Text style={s.deleteText}>删除</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={s.cardMeta}>{r.src||'?'} → {r.dest||'?'} · {r.proto||'any'}{r.dest_port?':'+r.dest_port:''}</Text>
-                <TouchableOpacity style={s.deleteBtn} onPress={() => deleteRule(r)}>
-                  <Text style={s.deleteText}>删除</Text>
-                </TouchableOpacity>
+                <Text style={s.cardMeta}>
+                  {r.src||'any'} → {r.dest||'any'} · {r.proto||'any'}{r.dest_port ? ':'+r.dest_port : ''}
+                </Text>
               </View>
             ))}
           </>
@@ -205,6 +209,7 @@ const s = StyleSheet.create({
   empty:   { textAlign:'center', color:C.muted, marginTop:40, fontSize:14 },
   card:    { backgroundColor:C.bg2, borderWidth:1, borderColor:C.border, borderRadius:10, padding:14, marginBottom:10 },
   cardHeader: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:6 },
+  cardHeaderRight: { flexDirection:'row', alignItems:'center', gap:8 },
   cardName:{ fontSize:15, fontWeight:'600', color:C.text, flex:1, marginRight:8 },
   cardMeta:{ fontSize:12, color:C.muted },
   badge:   { paddingHorizontal:9, paddingVertical:3, borderRadius:8 },
@@ -212,7 +217,7 @@ const s = StyleSheet.create({
   badgeRed:   { backgroundColor:'#7f1d1d33' },
   badgeBlue:  { backgroundColor:'#1f4a8f33', paddingHorizontal:9, paddingVertical:3, borderRadius:8 },
   badgeText:  { fontSize:11, fontWeight:'500' },
-  deleteBtn:  { position:'absolute', top:12, right:12, padding:4 },
+  deleteBtn:  { paddingHorizontal:8, paddingVertical:3, backgroundColor:'#2a101022', borderRadius:6, borderWidth:1, borderColor:'#f8514933' },
   deleteText: { color:C.red, fontSize:12 },
   zoneRow:    { flexDirection:'row', gap:8, flexWrap:'wrap', marginTop:8 },
   zoneItem:   { flexDirection:'row', alignItems:'center', gap:4 },

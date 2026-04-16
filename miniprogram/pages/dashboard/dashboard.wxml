@@ -83,8 +83,8 @@
           <text wx:if="{{item.ip}}" class="iface-ip">{{item.ip}}</text>
         </view>
         <view class="iface-right">
-          <text class="iface-stat">↓{{item.rx > 0 ? (item.rx / 1048576).toFixed(1) + 'MB' : '--'}}</text>
-          <text class="iface-stat">↑{{item.tx > 0 ? (item.tx / 1048576).toFixed(1) + 'MB' : '--'}}</text>
+          <text class="iface-stat">↓{{item.rxFmt}}</text>
+          <text class="iface-stat">↑{{item.txFmt}}</text>
         </view>
       </view>
     </view>

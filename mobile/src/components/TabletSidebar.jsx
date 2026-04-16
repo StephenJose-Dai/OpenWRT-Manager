@@ -10,11 +10,11 @@ const C = {
 }
 
 const NAV_ITEMS = [
-  { key: '控制台', icon: '⊞', label: '控制台' },
-  { key: '设备',   icon: '⊙', label: '设备管理' },
-  { key: '流量',   icon: '≋', label: '流量统计' },
-  { key: '防火墙', icon: '⛉', label: '防火墙' },
-  { key: '系统',   icon: '⚙', label: '系统设置' },
+  { key: '控制台', icon: '🖥', label: '控制台' },
+  { key: '设备',   icon: '📱', label: '设备管理' },
+  { key: '流量',   icon: '📊', label: '流量统计' },
+  { key: '防火墙', icon: '🛡', label: '防火墙' },
+  { key: '系统',   icon: '⚙️', label: '系统设置' },
 ]
 
 export default function TabletSidebar({ activeTab, onTabChange, navigation }) {
