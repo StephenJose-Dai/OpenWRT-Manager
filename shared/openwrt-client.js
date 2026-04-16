@@ -66,8 +66,9 @@ class OpenWrtClient {
     // Electron 环境：通过主进程代理，完全绕过 CORS 限制
     if (typeof window !== 'undefined' && window.electron?.ubusRequest) {
       try {
-        // 把 ignoreSSL 传给主进程，让它在发请求前设置证书验证
-        const data = await window.electron.ubusRequest(url, body, this.ignoreSSL);
+        // ignoreSSL：优先用配置值，HTTPS 时默认忽略（自签名证书）
+        const ssl = this.ignoreSSL || (this.https && this.ignoreSSL === undefined) || url.startsWith('https://');
+        const data = await window.electron.ubusRequest(url, body, ssl);
         return data;
       } catch (err) {
         console.error('[ubus-proxy] FAIL:', url, err.message);
@@ -316,7 +317,8 @@ class OpenWrtClient {
   // 自动配置 rpcd ACL（每次连接时调用，覆盖写入确保权限最新）
   async setupACL() {
     // ACL 内容：root 用户拥有全部权限
-    const aclJson = '{"root":{"read":{"ubus":{"*":["*"]},"uci":{"*":["read"]},"file":{"*":["read","exec"]}},"write":{"ubus":{"*":["*"]},"uci":{"*":["read","write"]},"file":{"*":["read","write","exec"]}}}}';
+    // 全权限：ubus/uci/file 全部放开，file 用通配符覆盖所有路径
+    const aclJson = '{"root":{"read":{"ubus":{"*":["*"]},"uci":{"*":["read"]},"file":{"*":["read","exec","list"]}},"write":{"ubus":{"*":["*"]},"uci":{"*":["read","write"]},"file":{"*":["read","write","exec","list"]}}}}';
 
     // 方法1：file.write（已有权限时）
     try {
@@ -400,26 +402,48 @@ class OpenWrtClient {
   async detectFeatures() {
     const features = {
       vpn: false, wireguard: false, docker: false,
-      adguard: false, passwall: false, clash: false
+      adguard: false, passwall: false, clash: false,
+      openclash: false, ssr: false, mosdns: false,
     };
+
+    // 用 file.read 检查配置文件（不依赖 file.exec 权限）
+    const fileChecks = [
+      [['vpn'],       '/etc/config/openvpn'],
+      [['wireguard'], '/etc/config/wireguard'],
+      [['adguard'],   '/etc/config/adguardhome'],
+      [['passwall'],  '/etc/config/passwall'],
+      [['passwall'],  '/etc/config/passwall2'],
+      [['clash'],     '/etc/config/clash'],
+      [['openclash'], '/etc/config/openclash'],
+      [['ssr'],       '/etc/config/shadowsocksr'],
+      [['mosdns'],    '/etc/config/mosdns'],
+    ];
+
+    await Promise.allSettled(fileChecks.map(async ([keys, path]) => {
+      try {
+        const r = await this.call('file', 'read', { path });
+        if (r && (r.data !== undefined)) {
+          keys.forEach(k => { if (k in features) features[k] = true; });
+        }
+      } catch {}
+    }));
+
+    // 检查 /etc/init.d/ 里的服务（更广泛）
     try {
-      // 检查各功能配置文件/包是否存在
-      const checks = [
-        ['cat', ['/etc/config/openvpn']],
-        ['cat', ['/etc/config/wireguard']],
-        ['which', ['dockerd']],
-        ['cat', ['/etc/config/adguardhome']],
-        ['cat', ['/etc/config/passwall']],
-        ['which', ['clash']],
-      ];
-      const keys = ['vpn', 'wireguard', 'docker', 'adguard', 'passwall', 'clash'];
-      const results = await Promise.allSettled(
-        checks.map(([cmd, args]) => this.execCommand(cmd, args))
-      );
-      results.forEach((r, i) => {
-        features[keys[i]] = r.status === 'fulfilled' && !!(r.value?.stdout || r.value?.code === 0);
-      });
+      const r = await this.call('file', 'list', { path: '/etc/init.d' });
+      const entries = r?.entries || [];
+      const names = entries.map(e => (e.name || '').toLowerCase());
+      if (names.some(n => /openvpn|ovpn/.test(n)))   features.vpn = true;
+      if (names.some(n => /wireguard|wg/.test(n)))    features.wireguard = true;
+      if (names.some(n => /docker/.test(n)))           features.docker = true;
+      if (names.some(n => /adguard/.test(n)))          features.adguard = true;
+      if (names.some(n => /passwall/.test(n)))         features.passwall = true;
+      if (names.some(n => /clash/.test(n)))            features.clash = true;
+      if (names.some(n => /openclash/.test(n)))        features.openclash = true;
+      if (names.some(n => /shadowsock|ssr/.test(n)))  features.ssr = true;
+      if (names.some(n => /mosdns/.test(n)))           features.mosdns = true;
     } catch {}
+
     return features;
   }
 

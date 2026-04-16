@@ -445,7 +445,9 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
       const autoR = list.find(r => r.autoLogin && r.password)
       if (autoR) {
         // 先设置 SSL 忽略状态，再连接
-        window.electron?.setSSLIgnore?.(autoR.ignoreSSL || false)
+        // HTTPS 时默认忽略 SSL（兼容旧配置）
+        const autoIgnoreSSL = autoR.ignoreSSL !== undefined ? autoR.ignoreSSL : (autoR.https || false)
+        window.electron?.setSSLIgnore?.(autoIgnoreSSL)
         connectRouter(autoR.id, autoR.password)
       }
     })
@@ -475,9 +477,10 @@ export default function ConnectionManager({ onConnected, onBack = null }) {
     setActiveId(id); setError('')
     try {
       const cfg    = mgr.getConfig(id)
-      // 通知主进程该连接是否需要忽略 SSL 证书
-      window.electron?.setSSLIgnore?.(cfg.ignoreSSL || false)
-      const client = new OpenWrtClient({...cfg, password, https:cfg.https||false, ignoreSSL:cfg.ignoreSSL||false, fetcher:window.fetch.bind(window)})
+      // HTTPS 且未设置 ignoreSSL 时，默认忽略（兼容旧配置）
+      const ignoreSSL = cfg.ignoreSSL !== undefined ? cfg.ignoreSSL : (cfg.https || false)
+      window.electron?.setSSLIgnore?.(ignoreSSL)
+      const client = new OpenWrtClient({...cfg, password, https:cfg.https||false, ignoreSSL, fetcher:window.fetch.bind(window)})
       await client.login()
       onConnected({ client, config:{...cfg, password}, manager:mgr })
     } catch(e) { setError(e.message||'连接失败') }

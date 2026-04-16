@@ -86,26 +86,14 @@ cat > /usr/share/rpcd/acl.d/owm.json << 'EOF'
 {
   "root": {
     "read": {
-      "ubus": {"*":["*"]},
-      "uci": {"*":["read"]},
-      "file": {
-        "/tmp/dhcp.leases":["read"],
-        "/proc/net/arp":["read"],
-        "/proc/net/dev":["read"],
-        "/bin/sh":["exec"],"/bin/ls":["exec"],
-        "/bin/cat":["exec"],"/sbin/logread":["exec"]
-      }
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read"]},
+      "file": {"*": ["read","exec","list"]}
     },
     "write": {
-      "ubus":{"*":["*"]},
-      "uci":{"*":["read","write"]},
-      "file": {
-        "/tmp/dhcp.leases":["read"],
-        "/proc/net/arp":["read"],
-        "/proc/net/dev":["read"],
-        "/bin/sh":["exec"],"/etc/init.d/*":["exec"],
-        "/sbin/iptables":["exec"],"/usr/sbin/iptables":["exec"]
-      }
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read","write"]},
+      "file": {"*": ["read","write","exec","list"]}
     }
   }
 }

@@ -14,9 +14,9 @@ const BASE_NAV = [
   { path: 'traffic',   label: '流量',   Icon: BarChart3 },
   { path: 'firewall',  label: '防火墙', Icon: Shield },
 ]
-// 动态菜单（根据 features 显示）
+// 动态菜单（根据路由器实际安装的功能显示）
 const OPTIONAL_NAV = [
-  { path: 'vpn', label: 'VPN', Icon: Network, featureKey: 'vpn' },
+  { path: 'vpn', label: 'VPN',       Icon: Network, featureKeys: ['vpn','wireguard','openclash','clash','ssr','passwall'] },
 ]
 // 尾部固定菜单
 const TAIL_NAV = [
@@ -34,7 +34,10 @@ export default function Layout({ client, config, manager, features = {}, aclRead
   // 动态计算菜单
   const NAV = [
     ...BASE_NAV,
-    ...OPTIONAL_NAV.filter(n => !n.featureKey || features[n.featureKey]),
+    ...OPTIONAL_NAV.filter(n => {
+      if (!n.featureKeys) return true
+      return n.featureKeys.some(k => features[k])
+    }),
     ...TAIL_NAV,
   ]
 
@@ -144,10 +147,27 @@ export default function Layout({ client, config, manager, features = {}, aclRead
                 </span>
               </div>
               <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-                <code style={{background:'#1a1000',padding:'4px 8px',borderRadius:4,
-                  fontSize:11,color:'#fcd34d',userSelect:'all',cursor:'text'}}>
-                  cat &gt; /usr/share/rpcd/acl.d/owm.json &lt;&lt; 'EOF'{"\n"}{"{\"root\":{\"read\":{\"ubus\":{\"*\":[\"*\"]},\"uci\":{\"*\":[\"read\"]},\"file\":{\"*\":[\"read\",\"exec\"]}},\"write\":{\"ubus\":{\"*\":[\"*\"]},\"uci\":{\"*\":[\"read\",\"write\"]},\"file\":{\"*\":[\"read\",\"write\",\"exec\"]}}}"}{"\n"}EOF{"\n"}/etc/init.d/rpcd restart
-                </code>
+                <pre style={{background:'#1a1000',padding:'8px 10px',borderRadius:4,
+                  fontSize:11,color:'#fcd34d',userSelect:'all',cursor:'text',
+                  margin:0,overflowX:'auto',whiteSpace:'pre'}}>
+{`cat > /usr/share/rpcd/acl.d/owm.json << 'EOF'
+{
+  "root": {
+    "read": {
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read"]},
+      "file": {"*": ["read","exec","list"]}
+    },
+    "write": {
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read","write"]},
+      "file": {"*": ["read","write","exec","list"]}
+    }
+  }
+}
+EOF
+/etc/init.d/rpcd restart`}
+                </pre>
                 <button onClick={async () => {
                     const btn = document.activeElement
                     if (btn) btn.textContent = '配置中...'

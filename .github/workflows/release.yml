@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（手动触发时使用）'
+        description: '版本号'
         required: false
         default: '1.0.0'
 
@@ -17,139 +17,124 @@ env:
   APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', inputs.version || '1.0.0') }}
 
 jobs:
-  # ── 准备阶段：读取版本和 changelog ───────────────────────
+  # ── 准备阶段 ──────────────────────────────────────────────
   prepare:
     runs-on: ubuntu-latest
     outputs:
       version:       ${{ steps.info.outputs.version }}
       is_prerelease: ${{ steps.info.outputs.is_prerelease }}
       changelog:     ${{ steps.info.outputs.changelog }}
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Extract version info
         id: info
         run: |
           VER="${{ env.APP_VERSION }}"
           echo "version=$VER" >> $GITHUB_OUTPUT
-
           if echo "$VER" | grep -qE '(alpha|beta|rc)'; then
             echo "is_prerelease=true"  >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
           fi
-
           PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -z "$PREV" ]; then
             LOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -20)
           else
             LOG=$(git log "${PREV}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
           fi
-          {
-            echo "changelog<<__EOF__"
-            echo "${LOG:-（无更新记录）}"
-            echo "__EOF__"
-          } >> $GITHUB_OUTPUT
+          { echo "changelog<<__EOF__"; echo "${LOG:-（无更新记录）}"; echo "__EOF__"; } >> $GITHUB_OUTPUT
 
   # ── Windows 10/11 ─────────────────────────────────────────
   win-modern:
     needs: prepare
-    name: Windows 10/11 — ${{ matrix.arch }}
+    name: Windows 10/11 — ${{ matrix.arch }} — ${{ matrix.build_type }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
         arch: [x64, ia32]
-
+        build_type: [debug, release]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: ''
-
       - uses: actions/cache@v4
         id: c
         with:
           path: desktop/node_modules
           key: nm-modern-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
-
       - name: npm ci
         if: steps.c.outputs.cache-hit != 'true'
         working-directory: desktop
         run: npm ci
-
-
       - name: Build
         working-directory: desktop
         run: npm run build
         env:
           VITE_APP_VERSION: ${{ needs.prepare.outputs.version }}
-
+          NODE_ENV: ${{ matrix.build_type == 'release' && 'production' || 'development' }}
       - name: Package
         working-directory: desktop
         run: npx electron-builder --win nsis portable --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          # release 版本用代码签名证书（可选，没有也能打包，只是没有数字签名）
+          WIN_CSC_LINK:     ${{ matrix.build_type == 'release' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ matrix.build_type == 'release' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
       - name: Rename
         shell: pwsh
         working-directory: desktop/dist-electron
         run: |
-          $v="${{ needs.prepare.outputs.version }}"; $a="${{ matrix.arch }}"
+          $v="${{ needs.prepare.outputs.version }}"
+          $a="${{ matrix.arch }}"
+          $t="${{ matrix.build_type }}"
           Get-ChildItem "*.exe" | ForEach-Object {
-            $t = if ($_.Name -match "(?i)portable") {"portable"} else {"setup"}
-            Rename-Item $_.FullName "OpenWrtManager-${v}-win10-${a}-${t}.exe"
+            $type = if ($_.Name -match "(?i)portable") {"portable"} else {"setup"}
+            Rename-Item $_.FullName "OpenWrtManager-${v}-win10-${a}-${type}-${t}.exe"
           }
-
       - uses: actions/upload-artifact@v4
         with:
-          name: win-modern-${{ matrix.arch }}
+          name: win-modern-${{ matrix.arch }}-${{ matrix.build_type }}
           path: desktop/dist-electron/*.exe
           retention-days: 3
 
   # ── Windows 7/8/8.1 ──────────────────────────────────────
   win-legacy:
     needs: prepare
-    name: Windows 7/8 — ${{ matrix.arch }}
+    name: Windows 7/8 — ${{ matrix.arch }} — ${{ matrix.build_type }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
         arch: [x64, ia32]
-
+        build_type: [debug, release]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: ''
-
       - uses: actions/cache@v4
         id: c
         with:
           path: desktop/node_modules
           key: nm-legacy-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
-
       - name: Install + Electron 22
         working-directory: desktop
         shell: pwsh
         run: |
           if ("${{ steps.c.outputs.cache-hit }}" -ne "true") { npm ci }
           npm install electron@22.3.27 --save-dev --legacy-peer-deps --no-save
-
-
       - name: Build
         working-directory: desktop
         run: npm run build
         env:
           VITE_APP_VERSION: ${{ needs.prepare.outputs.version }}
-
+          NODE_ENV: ${{ matrix.build_type == 'release' && 'production' || 'development' }}
       - name: Patch package.json
         working-directory: desktop
         shell: pwsh
@@ -160,95 +145,115 @@ jobs:
           } else { $p.build.electronVersion = "22.3.27" }
           $p.build.win.target = @(@{target="nsis";arch=@("${{ matrix.arch }}")})
           $p | ConvertTo-Json -Depth 20 | Set-Content package.json
-
       - name: Package
         working-directory: desktop
         run: npx electron-builder --win nsis --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          WIN_CSC_LINK:         ${{ matrix.build_type == 'release' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ matrix.build_type == 'release' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
       - name: Rename
         shell: pwsh
         working-directory: desktop/dist-electron
         run: |
-          $v="${{ needs.prepare.outputs.version }}"; $a="${{ matrix.arch }}"
+          $v="${{ needs.prepare.outputs.version }}"
+          $a="${{ matrix.arch }}"
+          $t="${{ matrix.build_type }}"
           Get-ChildItem "*.exe" | ForEach-Object {
-            Rename-Item $_.FullName "OpenWrtManager-${v}-win7-${a}-setup.exe"
+            Rename-Item $_.FullName "OpenWrtManager-${v}-win7-${a}-setup-${t}.exe"
           }
-
       - uses: actions/upload-artifact@v4
         with:
-          name: win-legacy-${{ matrix.arch }}
+          name: win-legacy-${{ matrix.arch }}-${{ matrix.build_type }}
           path: desktop/dist-electron/*.exe
           retention-days: 3
 
   # ── Android ───────────────────────────────────────────────
   android:
     needs: prepare
-    name: Android APK
+    name: Android APK — ${{ matrix.build_type }}
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [debug, release]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: temurin
           cache: gradle
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: ''
-
       - uses: actions/cache@v4
         id: c
         with:
           path: mobile/node_modules
           key: nm-android-${{ hashFiles('mobile/package-lock.json') }}
-
       - name: npm install
         if: steps.c.outputs.cache-hit != 'true'
         working-directory: mobile
         run: npm install --legacy-peer-deps
-
       - uses: android-actions/setup-android@v3
-
       - run: sdkmanager "ndk;26.1.10909125"
 
-      - name: Restore keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # release 版本：解码 keystore
+      - name: Restore keystore (release only)
+        if: matrix.build_type == 'release'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d \
-            > mobile/android/app/release.keystore
-          echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > mobile/android/app/release.keystore
+            echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
+          fi
 
       - name: Patch gradle.properties
         working-directory: mobile/android
         run: |
           echo "reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64" >> gradle.properties
           echo "org.gradle.jvmargs=-Xmx4096m" >> gradle.properties
-          echo "org.gradle.parallel=true" >> gradle.properties
+          echo "org.gradle.parallel=true"      >> gradle.properties
 
       - name: JS bundle
         working-directory: mobile
         run: |
           mkdir -p android/app/src/main/assets
           npx react-native bundle \
-            --platform android --dev false \
+            --platform android \
+            --dev ${{ matrix.build_type == 'debug' && 'true' || 'false' }} \
             --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
 
-      - name: Build APKs
+      - name: Build APKs (debug)
+        if: matrix.build_type == 'debug'
         working-directory: mobile/android
         run: |
+          ./gradlew assembleDebug \
+            -PversionName="${{ needs.prepare.outputs.version }}" \
+            -PversionCode="${{ github.run_number }}" \
+            -PenableSeparateBuildPerCPUArchitecture=true \
+            -PuniversalApk=true
+
+      - name: Build APKs (release)
+        if: matrix.build_type == 'release'
+        working-directory: mobile/android
+        env:
+          KEY_ALIAS:      ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD:   ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
           SIGN=""
-          [ "$HAS_KEYSTORE" = "true" ] && SIGN="-PkeystoreFile=$(pwd)/app/release.keystore \
-            -PkeyAlias=${{ secrets.ANDROID_KEY_ALIAS }} \
-            -PkeyPassword=${{ secrets.ANDROID_KEY_PASSWORD }} \
-            -PstorePassword=${{ secrets.ANDROID_STORE_PASSWORD }}"
+          if [ "$HAS_KEYSTORE" = "true" ]; then
+            SIGN="-PkeystoreFile=$(pwd)/app/release.keystore \
+              -PkeyAlias=$KEY_ALIAS \
+              -PkeyPassword=$KEY_PASSWORD \
+              -PstorePassword=$STORE_PASSWORD"
+          fi
           ./gradlew assembleRelease \
             -PversionName="${{ needs.prepare.outputs.version }}" \
             -PversionCode="${{ github.run_number }}" \
@@ -259,21 +264,22 @@ jobs:
       - name: Collect APKs
         run: |
           V="${{ needs.prepare.outputs.version }}"
-          S="mobile/android/app/build/outputs/apk/release"
+          T="${{ matrix.build_type }}"
+          S="mobile/android/app/build/outputs/apk/${T}"
           mkdir apks
           declare -A M=(["armeabi-v7a"]="armv7" ["arm64-v8a"]="arm64" ["x86"]="x86" ["x86_64"]="x86_64")
           for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-            [ -f "$S/app-${abi}-release.apk" ] && \
-              cp "$S/app-${abi}-release.apk" "apks/OpenWrtManager-${V}-android-${M[$abi]}.apk"
+            f="$S/app-${abi}-${T}.apk"
+            [ -f "$f" ] && cp "$f" "apks/OpenWrtManager-${V}-android-${M[$abi]}-${T}.apk"
           done
-          for f in "$S/app-universal-release.apk" "$S/app-release.apk"; do
-            [ -f "$f" ] && cp "$f" "apks/OpenWrtManager-${V}-android-universal.apk" && break
+          for f in "$S/app-universal-${T}.apk" "$S/app-${T}.apk"; do
+            [ -f "$f" ] && cp "$f" "apks/OpenWrtManager-${V}-android-universal-${T}.apk" && break
           done
           ls -lh apks/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-apks
+          name: android-apks-${{ matrix.build_type }}
           path: apks/*.apk
           retention-days: 3
           if-no-files-found: error
@@ -281,8 +287,12 @@ jobs:
   # ── Linux x64 ─────────────────────────────────────────────
   linux-x64:
     needs: prepare
-    name: Linux x64
+    name: Linux x64 — ${{ matrix.build_type }}
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [debug, release]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -297,7 +307,7 @@ jobs:
       - if: steps.c.outputs.cache-hit != 'true'
         working-directory: desktop
         run: npm ci
-      - name: Install packaging deps (bsdtar for pacman, rpm)
+      - name: Install packaging deps
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot
@@ -305,35 +315,39 @@ jobs:
         run: npm run build
         env:
           VITE_APP_VERSION: ${{ needs.prepare.outputs.version }}
+          NODE_ENV: ${{ matrix.build_type == 'release' && 'production' || 'development' }}
       - working-directory: desktop
-        run: npx electron-builder --linux deb rpm AppImage pacman --x64 --publish never
+        run: npx electron-builder --linux deb rpm AppImage --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Rename
         run: |
           V="${{ needs.prepare.outputs.version }}"
+          T="${{ matrix.build_type }}"
           cd desktop/dist-electron
-          for f in *.deb;      do mv "$f" "OpenWrtManager-${V}-linux-x64.deb"      2>/dev/null||true; done
-          for f in *.rpm;      do mv "$f" "OpenWrtManager-${V}-linux-x64.rpm"      2>/dev/null||true; done
-          for f in *.AppImage; do mv "$f" "OpenWrtManager-${V}-linux-x64.AppImage" 2>/dev/null||true; done
-          for f in *.pacman;   do mv "$f" "OpenWrtManager-${V}-linux-x64.pacman"   2>/dev/null||true; done
+          for f in *.deb;      do mv "$f" "OpenWrtManager-${V}-linux-x64-${T}.deb"      2>/dev/null||true; done
+          for f in *.rpm;      do mv "$f" "OpenWrtManager-${V}-linux-x64-${T}.rpm"      2>/dev/null||true; done
+          for f in *.AppImage; do mv "$f" "OpenWrtManager-${V}-linux-x64-${T}.AppImage" 2>/dev/null||true; done
           ls -lh
       - uses: actions/upload-artifact@v4
         with:
-          name: rel-linux-x64
+          name: linux-x64-${{ matrix.build_type }}
           path: |
             desktop/dist-electron/*.deb
             desktop/dist-electron/*.rpm
             desktop/dist-electron/*.AppImage
-            desktop/dist-electron/*.pacman
           retention-days: 3
           if-no-files-found: warn
 
   # ── Linux arm64 ───────────────────────────────────────────
   linux-arm64:
     needs: prepare
-    name: Linux arm64
+    name: Linux arm64 — ${{ matrix.build_type }}
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [debug, release]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -358,6 +372,7 @@ jobs:
         run: npm run build
         env:
           VITE_APP_VERSION: ${{ needs.prepare.outputs.version }}
+          NODE_ENV: ${{ matrix.build_type == 'release' && 'production' || 'development' }}
       - working-directory: desktop
         run: npx electron-builder --linux deb rpm AppImage --arm64 --publish never
         env:
@@ -365,14 +380,15 @@ jobs:
       - name: Rename
         run: |
           V="${{ needs.prepare.outputs.version }}"
+          T="${{ matrix.build_type }}"
           cd desktop/dist-electron
-          for f in *.deb;      do mv "$f" "OpenWrtManager-${V}-linux-arm64.deb"      2>/dev/null||true; done
-          for f in *.rpm;      do mv "$f" "OpenWrtManager-${V}-linux-arm64.rpm"      2>/dev/null||true; done
-          for f in *.AppImage; do mv "$f" "OpenWrtManager-${V}-linux-arm64.AppImage" 2>/dev/null||true; done
+          for f in *.deb;      do mv "$f" "OpenWrtManager-${V}-linux-arm64-${T}.deb"      2>/dev/null||true; done
+          for f in *.rpm;      do mv "$f" "OpenWrtManager-${V}-linux-arm64-${T}.rpm"      2>/dev/null||true; done
+          for f in *.AppImage; do mv "$f" "OpenWrtManager-${V}-linux-arm64-${T}.AppImage" 2>/dev/null||true; done
           ls -lh
       - uses: actions/upload-artifact@v4
         with:
-          name: rel-linux-arm64
+          name: linux-arm64-${{ matrix.build_type }}
           path: |
             desktop/dist-electron/*.deb
             desktop/dist-electron/*.rpm
@@ -385,18 +401,15 @@ jobs:
     needs: [prepare, win-modern, win-legacy, android, linux-x64, linux-arm64]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-
     steps:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
           path: all
-
       - name: Summary
         run: |
           echo "## 发布产物 — ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           ls -lh all/ | awk 'NR>1{print "- `"$NF"` ("$5")"}' >> $GITHUB_STEP_SUMMARY
-
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -405,8 +418,6 @@ jobs:
           body: |
             # OpenWrt Manager ${{ needs.prepare.outputs.version }}
 
-            OpenWrt 路由器无后端直连管理工具，通过 ubus HTTP 直连路由器。
-
             ## 更新内容
             ${{ needs.prepare.outputs.changelog }}
 
@@ -414,35 +425,48 @@ jobs:
 
             ## 下载
 
-            ### Windows 桌面客户端
-            | 文件 | 系统 | 架构 |
-            |------|------|------|
-            | `*-win10-x64-setup.exe` | Windows 10/11 | 64位 ✅ 推荐 |
-            | `*-win10-x64-portable.exe` | Windows 10/11 | 64位（免安装）|
-            | `*-win10-ia32-setup.exe` | Windows 10/11 | 32位 |
-            | `*-win7-x64-setup.exe` | Win 7/8/8.1 | 64位（兼容旧系统）|
-            | `*-win7-ia32-setup.exe` | Win 7/8/8.1 | 32位（兼容旧系统）|
+            > **release** = 正式签名版；**debug** = 调试版（未签名，仅测试用）
 
-            ### Android 手机 APP
-            | 文件 | 适用设备 |
-            |------|---------|
-            | `*-android-arm64.apk` | 主流 Android 手机 ✅ 推荐 |
-            | `*-android-armv7.apk` | 老款 Android（ARMv7）|
-            | `*-android-x86_64.apk` | x86_64 平板/模拟器 |
-            | `*-android-x86.apk` | x86 模拟器 |
-            | `*-android-universal.apk` | 通用包（不确定架构选此）|
+            ### Windows
+            | 文件 | 说明 |
+            |------|------|
+            | `*-win10-x64-setup-release.exe` | Win10/11 64位 安装版 ✅ 推荐 |
+            | `*-win10-x64-portable-release.exe` | Win10/11 64位 便携版 |
+            | `*-win10-ia32-setup-release.exe` | Win10/11 32位 |
+            | `*-win7-x64-setup-release.exe` | Win7/8/8.1 64位 |
+            | `*-win7-ia32-setup-release.exe` | Win7/8/8.1 32位 |
+            | `*-debug.exe` | 调试版（含DevTools）|
+
+            ### Android
+            | 文件 | 说明 |
+            |------|------|
+            | `*-android-arm64-release.apk` | 主流手机 ✅ 推荐 |
+            | `*-android-armv7-release.apk` | 老款 Android |
+            | `*-android-universal-release.apk` | 通用包 |
+            | `*-android-*-debug.apk` | 调试版 |
+
+            ### Linux
+            | 文件 | 说明 |
+            |------|------|
+            | `*-linux-x64-release.AppImage` | Linux x64 通用 ✅ |
+            | `*-linux-x64-release.deb` | Debian/Ubuntu |
+            | `*-linux-arm64-release.AppImage` | Linux arm64 |
 
             ---
 
             ## 路由器端初始化（一次性）
             ```bash
-            opkg update && opkg install rpcd uhttpd-mod-ubus luci-mod-rpc
-            uci set uhttpd.main.ubus_cors=1
-            uci commit uhttpd && /etc/init.d/uhttpd restart
+            opkg update && opkg install rpcd-mod-file luci-mod-rpc
+            cat > /usr/share/rpcd/acl.d/owm.json << 'EOF'
+            {
+              "root": {
+                "read":  { "ubus": {"*":["*"]}, "uci": {"*":["read"]},        "file": {"*":["read","exec","list"]} },
+                "write": { "ubus": {"*":["*"]}, "uci": {"*":["read","write"]}, "file": {"*":["read","write","exec","list"]} }
+              }
+            }
+            EOF
+            /etc/init.d/rpcd restart
             ```
-
-            ## 微信小程序
-            见仓库 `miniprogram/` 目录，用微信开发者工具导入后发布。
           files: all/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
