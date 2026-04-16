@@ -107,7 +107,7 @@ dependencies {
 }
 
 react {
-    entryFile     = file(["node", "-e", "require('path').resolve(require.resolve('react-native/package.json'), '../local-cli/cli.js')"].execute().text.trim())
+    // 使用默认配置，React Native 0.73 会自动找到 index.js
     hermesEnabled = true
     enableProguardInReleaseBuilds = true
 }

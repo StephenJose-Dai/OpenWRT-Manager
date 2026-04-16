@@ -57,6 +57,15 @@ jobs:
           sdkmanager "ndk;26.1.10909125"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
+      - name: Setup Gradle wrapper
+        working-directory: mobile/android
+        run: |
+          # 如果 gradle-wrapper.jar 缺失，用系统 gradle 生成
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            gradle wrapper --gradle-version 8.3
+          fi
+          chmod +x gradlew
+
       - name: Restore signing keystore
         if: env.BUILD_TYPE == 'release'
         env:
