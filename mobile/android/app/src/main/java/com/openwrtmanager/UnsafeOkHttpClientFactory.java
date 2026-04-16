@@ -3,7 +3,6 @@ package com.openwrtmanager;
 import com.facebook.react.modules.network.OkHttpClientFactory;
 import com.facebook.react.modules.network.ReactCookieJarContainer;
 
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.TimeUnit;
 
@@ -14,48 +13,35 @@ import javax.net.ssl.X509TrustManager;
 import okhttp3.OkHttpClient;
 
 /**
- * 自定义 OkHttpClient 工厂，信任所有 SSL 证书（包括自签名）
- * 用于路由器管理 APP，路由器通常使用自签名证书
+ * 信任所有 SSL 证书的 OkHttp 工厂
+ * OpenWrt 路由器通常使用自签名证书，需要跳过验证
  */
 public class UnsafeOkHttpClientFactory implements OkHttpClientFactory {
 
     @Override
     public OkHttpClient createNewNetworkModuleClient() {
         try {
-            // 信任所有证书的 TrustManager
-            final X509TrustManager trustAllCerts = new X509TrustManager() {
-                @Override
-                public void checkClientTrusted(X509Certificate[] chain, String authType)
-                    throws CertificateException {}
-
-                @Override
-                public void checkServerTrusted(X509Certificate[] chain, String authType)
-                    throws CertificateException {}
-
-                @Override
-                public X509Certificate[] getAcceptedIssuers() {
-                    return new X509Certificate[0];
-                }
+            X509TrustManager trustAll = new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] c, String a) {}
+                public void checkServerTrusted(X509Certificate[] c, String a) {}
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
             };
 
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, new TrustManager[]{trustAllCerts}, new java.security.SecureRandom());
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, new TrustManager[]{trustAll}, null);
 
             return new OkHttpClient.Builder()
                 .cookieJar(new ReactCookieJarContainer())
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .writeTimeout(15, TimeUnit.SECONDS)
-                .sslSocketFactory(sslContext.getSocketFactory(), trustAllCerts)
-                .hostnameVerifier((hostname, session) -> true) // 信任所有主机名
+                .sslSocketFactory(sc.getSocketFactory(), trustAll)
+                .hostnameVerifier((h, s) -> true)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
 
         } catch (Exception e) {
-            // 出错时返回默认客户端
             return new OkHttpClient.Builder()
                 .cookieJar(new ReactCookieJarContainer())
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
                 .build();
         }
     }

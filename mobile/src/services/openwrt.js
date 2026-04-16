@@ -27,31 +27,62 @@ class OpenWrtClient {
 
   async _rpc(params) {
     const id   = this._id++
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), this.timeout)
-    try {
-      const res = await fetch(`${this.baseUrl}/ubus`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ jsonrpc: '2.0', id, method: 'call', params }),
-        signal:  ctrl.signal,
-      })
-      clearTimeout(timer)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      if (data.error) throw new Error(data.error.message || 'RPC 错误')
-      if (!Array.isArray(data.result)) {
-        if (data.result && typeof data.result === 'object') return data.result
-        throw new Error('无效响应')
+    const body = JSON.stringify({ jsonrpc: '2.0', id, method: 'call', params })
+    const url  = `${this.baseUrl}/ubus`
+
+    // 用 XMLHttpRequest 替代 fetch：
+    // RN Android 上 XHR 走 OkHttp（已被 UnsafeOkHttpClientFactory 替换），
+    // 而 fetch 走另一套实现，自签名证书会被拦截
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      const timer = setTimeout(() => {
+        xhr.abort()
+        reject(new Error(`请求超时(${this.timeout/1000}s): ${url}`))
+      }, this.timeout)
+
+      xhr.open('POST', url)
+      xhr.setRequestHeader('Content-Type', 'application/json')
+      xhr.responseType = 'json'
+
+      xhr.onload = () => {
+        clearTimeout(timer)
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error(`HTTP ${xhr.status}`)); return
+        }
+        const data = xhr.response || JSON.parse(xhr.responseText || '{}')
+        if (!data) { reject(new Error('空响应')); return }
+        if (data.error) { reject(new Error(data.error.message || 'RPC 错误')); return }
+        if (!Array.isArray(data.result)) {
+          if (data.result && typeof data.result === 'object') { resolve(data.result); return }
+          reject(new Error('无效响应: ' + JSON.stringify(data).slice(0, 100))); return
+        }
+        const [code, result] = data.result
+        if (code !== 0) { reject(new OpenWrtError(code)); return }
+        resolve(result || {})
       }
-      const [code, result] = data.result
-      if (code !== 0) throw new OpenWrtError(code)
-      return result || {}
-    } catch (err) {
-      clearTimeout(timer)
-      if (err.name === 'AbortError') throw new Error('连接超时')
-      throw err
-    }
+
+      xhr.onerror = () => {
+        clearTimeout(timer)
+        reject(new Error('网络错误（XHR onerror）'))
+      }
+
+      xhr.ontimeout = () => {
+        clearTimeout(timer)
+        reject(new Error('连接超时（XHR ontimeout）'))
+      }
+
+      xhr.onabort = () => {
+        clearTimeout(timer)
+        reject(new Error('请求被中断'))
+      }
+
+      try {
+        xhr.send(body)
+      } catch (e) {
+        clearTimeout(timer)
+        reject(e)
+      }
+    })
   }
 
   async login() {

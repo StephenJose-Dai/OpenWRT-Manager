@@ -47,10 +47,8 @@ export default function AddScreen({ navigation, route }) {
       await c.login()
       setTestResult('ok')
     } catch (e) {
-      const m = e.message || ''
-      if (m.includes('超时') || m.includes('TIMED_OUT')) setTestResult('timeout')
-      else if (m.includes('certificate') || m.includes('SSL')) setTestResult('ssl')
-      else setTestResult('fail:' + m)
+      // 把原始错误完整显示，方便诊断
+      setTestResult('fail:' + (e.message || String(e)))
     }
     setTesting(false)
   }
@@ -73,7 +71,7 @@ export default function AddScreen({ navigation, route }) {
         username, password: rememberPwd ? password : '',
         rememberPassword: rememberPwd, autoLogin
       }
-      const client = new OpenWrtClient({ ...cfg, password })
+      const client = new OpenWrtClient({ ...cfg, password, ignoreSSL })
       await client.login()
       // 自动配置 ACL
       client.setupACL().catch(() => {})
@@ -154,10 +152,10 @@ export default function AddScreen({ navigation, route }) {
           <TouchableOpacity style={[s.testBtn, testing && s.dim]} onPress={testConnect} disabled={testing}>
             <Text style={s.testBtnText}>{testing ? '测试中...' : '测试连接'}</Text>
           </TouchableOpacity>
-          {testResult === 'ok'      && <Text style={s.testOk}>✓ 连接成功</Text>}
-          {testResult === 'timeout' && <Text style={s.testFail}>超时，检查 IP 和端口</Text>}
-          {testResult === 'ssl'     && <Text style={s.testFail}>SSL 错误，请开启忽略证书</Text>}
-          {testResult.startsWith('fail:') && <Text style={s.testFail}>{testResult.slice(5)}</Text>}
+          {testResult === 'ok' && <Text style={s.testOk}>✓ 连接成功</Text>}
+          {testResult.startsWith('fail:') && (
+            <Text style={s.testFail} numberOfLines={3}>{testResult.slice(5)}</Text>
+          )}
         </View>
 
         {/* 验证码 */}
