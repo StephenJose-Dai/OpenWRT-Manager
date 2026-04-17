@@ -47,7 +47,7 @@ Page({
     // 把客户端配置存到全局，让 dashboard 等页面复用
     getApp().globalData.currentRouter = router;
     getApp().globalData.currentMgr    = mgr;
-    wx.switchTab({ url: '/pages/dashboard/dashboard' });
+    wx.navigateTo({ url: '/pages/webview/webview' });
   },
 
   onRouterTap(e) {

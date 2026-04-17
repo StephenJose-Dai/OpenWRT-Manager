@@ -11,20 +11,19 @@
   <!-- 数量统计 -->
   <view class="count-row">
     <text class="count-text">在线设备</text>
-    <view class="count-badge">{{devices.length}}</view>
-    <view class="refresh-btn {{loading ? 'spin' : ''}}" bindtap="_fetch">↻</view>
+    <view class="count-badge">{{filteredDevices.length}}</view>
+    <view class="refresh-btn" bindtap="_fetch">↻</view>
   </view>
 
   <!-- 设备列表 -->
-  <view wx:if="{{devices.length > 0}}" class="device-list">
+  <view wx:if="{{filteredDevices.length > 0}}" class="device-list">
     <view
-      wx:for="{{devices}}"
+      wx:for="{{filteredDevices}}"
       wx:key="mac"
       class="device-card"
-      hidden="{{keyword && !(item.hostname || '').toLowerCase().includes(keyword.toLowerCase()) && !item.ip.includes(keyword) && !item.mac.toLowerCase().includes(keyword.toLowerCase())}}"
     >
       <view class="device-avatar">
-        <text class="avatar-char">{{(item.hostname || item.ip).charAt(0).toUpperCase()}}</text>
+        <text class="avatar-char">{{item.initial}}</text>
       </view>
       <view class="device-info">
         <text class="device-name">{{item.hostname || '未知设备'}}</text>
@@ -44,14 +43,18 @@
   </view>
 
   <!-- 空状态 -->
-  <view wx:if="{{!loading && devices.length === 0}}" class="empty">
+  <view wx:if="{{!loading && filteredDevices.length === 0 && !keyword}}" class="empty">
     <text class="empty-icon">📡</text>
     <text class="empty-text">暂无在线设备</text>
     <view class="btn-refresh" bindtap="_fetch">刷新</view>
   </view>
 
+  <view wx:if="{{!loading && filteredDevices.length === 0 && keyword}}" class="empty">
+    <text class="empty-text">无匹配结果</text>
+  </view>
+
   <!-- 加载中 -->
-  <view wx:if="{{loading && devices.length === 0}}" class="loading">
+  <view wx:if="{{loading}}" class="loading">
     <text>加载中...</text>
   </view>
 

@@ -6,7 +6,8 @@ mgr.load();
 
 Page({
   data: {
-    // 表单
+    proto:     'http',    // 'http' | 'https'
+    ignoreSSL: false,
     form: {
       label: '', host: '', port: 80,
       username: 'root', password: '',
@@ -16,40 +17,44 @@ Page({
     captchaCode:  '',
     captchaInput: '',
     captchaWrong: false,
-    // 状态
     testing:    false,
-    testResult: '',   // '' | 'ok' | 'fail'
+    testResult: '',
+    testMsg:    '',
     saving:     false,
     errors:     {}
   },
 
   onLoad(options) {
     mgr.load();
-
-    // 从扫描页带过来的 host
     if (options.host) {
-      this.setData({ 'form.host': options.host, 'form.label': `路由器(${options.host})` });
+      const isHttps = options.https === 'true'
+      this.setData({
+        proto: isHttps ? 'https' : 'http',
+        ignoreSSL: isHttps,
+        'form.host': options.host,
+        'form.port': isHttps ? 443 : 80,
+        'form.label': `路由器(${options.host})`
+      });
     }
-
-    // 编辑模式
     if (options.id) {
       const cfg = mgr.get(options.id);
       if (cfg) {
-        this.setData({ form: { ...cfg, password: cfg.rememberPassword ? cfg.password : '' }, editId: options.id });
+        this.setData({
+          proto: cfg.https ? 'https' : 'http',
+          ignoreSSL: cfg.ignoreSSL || false,
+          form: { ...cfg, password: cfg.rememberPassword ? cfg.password : '' },
+          editId: options.id
+        });
       }
     }
-
     this._refreshCaptcha();
   },
 
-  onReady() {
-    this._drawCaptcha();
-  },
+  onReady() { this._drawCaptcha(); },
 
   _refreshCaptcha() {
     const code = generateCaptchaCode();
     this.setData({ captchaCode: code, captchaInput: '', captchaWrong: false });
-    // 延迟一帧再绘制
     wx.nextTick(() => this._drawCaptcha());
   },
 
@@ -66,16 +71,25 @@ Page({
 
   onCaptchaTap() { this._refreshCaptcha(); },
 
+  switchProto(e) {
+    const proto = e.currentTarget.dataset.proto;
+    const port  = proto === 'https' ? 443 : 80;
+    this.setData({ proto, ignoreSSL: proto === 'https', 'form.port': port });
+  },
+
+  toggleSSL() {
+    this.setData({ ignoreSSL: !this.data.ignoreSSL });
+  },
+
   setField(e) {
-    const { field } = e.currentTarget.dataset;
-    this.setData({ [`form.${field}`]: e.detail.value });
+    this.setData({ [`form.${e.currentTarget.dataset.field}`]: e.detail.value });
   },
 
   setPort(e) {
     this.setData({ 'form.port': parseInt(e.detail.value) || 80 });
   },
 
-  togglePwd() { this.setData({ showPwd: !this.data.showPwd }); },
+  togglePwd()   { this.setData({ showPwd: !this.data.showPwd }); },
 
   toggleRemember(e) {
     const v = e.detail.value.length > 0;
@@ -87,61 +101,71 @@ Page({
     this.setData({ 'form.autoLogin': e.detail.value.length > 0 });
   },
 
-  // ─── 测试连接 ───────────────────────────────────────
   async testConnect() {
-    const { host, port, username, password } = this.data.form;
-    if (!host) { wx.showToast({ title: '请先填写地址', icon: 'none' }); return; }
-    this.setData({ testing: true, testResult: '' });
+    const { form, proto, ignoreSSL } = this.data;
+    if (!form.host) { wx.showToast({ title: '请先填写地址', icon: 'none' }); return; }
+    this.setData({ testing: true, testResult: '', testMsg: '' });
     try {
-      const client = new OpenWrtClient({ host, port, username, password });
+      const client = new OpenWrtClient({
+        host: form.host, port: form.port,
+        https: proto === 'https', ignoreSSL,
+        username: form.username, password: form.password
+      });
       await client.login();
-      this.setData({ testResult: 'ok' });
-    } catch {
-      this.setData({ testResult: 'fail' });
+      this.setData({ testResult: 'ok', testMsg: '连接成功' });
+    } catch(e) {
+      this.setData({ testResult: 'fail', testMsg: e.message || '连接失败' });
     }
     this.setData({ testing: false });
   },
 
-  // ─── 保存 ───────────────────────────────────────────
   async onSave() {
-    const { form, captchaCode, captchaInput } = this.data;
+    const { form, captchaCode, captchaInput, proto, ignoreSSL } = this.data;
     const errs = {};
-
     if (!form.host)     errs.host     = '请填写路由器地址';
     if (!form.password) errs.password = '请填写密码';
-
-    const codeOk = captchaInput.trim().toLowerCase() === captchaCode.toLowerCase();
-    if (!codeOk) {
+    if (captchaInput.trim().toLowerCase() !== captchaCode.toLowerCase()) {
       errs.captcha = '验证码错误';
       this.setData({ captchaWrong: true });
-      setTimeout(() => {
-        this.setData({ captchaWrong: false });
-        this._refreshCaptcha();
-      }, 500);
+      setTimeout(() => { this.setData({ captchaWrong: false }); this._refreshCaptcha(); }, 500);
     }
-
     this.setData({ errors: errs });
     if (Object.keys(errs).length) return;
 
     this.setData({ saving: true });
 
+    // 先测试连接
+    try {
+      const client = new OpenWrtClient({
+        host: form.host, port: form.port,
+        https: proto === 'https', ignoreSSL,
+        username: form.username, password: form.password
+      });
+      await client.login();
+    } catch(e) {
+      this.setData({ saving: false });
+      wx.showModal({ title: '连接失败', content: e.message, showCancel: false });
+      return;
+    }
+
     const id = mgr.add({
-      id:              this.data.editId,
-      label:           form.label || form.host,
-      host:            form.host,
-      port:            form.port,
-      username:        form.username,
-      password:        form.rememberPassword ? form.password : '',
-      rememberPassword:form.rememberPassword,
-      autoLogin:       form.autoLogin,
-      addedAt:         Date.now()
+      id: this.data.editId,
+      label:    form.label || form.host,
+      host:     form.host,
+      port:     form.port,
+      https:    proto === 'https',
+      ignoreSSL,
+      username: form.username,
+      password: form.rememberPassword ? form.password : '',
+      rememberPassword: form.rememberPassword,
+      autoLogin: form.autoLogin,
+      addedAt:  Date.now()
     });
 
-    // 把密码和配置传给全局以便直接连接
     getApp().globalData.currentRouter = { ...mgr.get(id), password: form.password };
     getApp().globalData.currentMgr    = mgr;
 
     this.setData({ saving: false });
-    wx.switchTab({ url: '/pages/dashboard/dashboard' });
+    wx.navigateTo({ url: '/pages/webview/webview' });
   }
 });

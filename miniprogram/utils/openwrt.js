@@ -8,7 +8,7 @@ class OpenWrtClient {
     this.username = config.username || 'root';
     this.password = config.password || '';
     this.https    = config.https || false;
-    this.timeout  = config.timeout || 8000;
+    this.timeout  = config.timeout || 15000;
     this.session  = null;
     this.sessionExpires = 0;
     this._id      = 1;
@@ -16,7 +16,8 @@ class OpenWrtClient {
 
   get baseUrl() {
     const proto = this.https ? 'https' : 'http';
-    const portStr = (this.port === 80 && !this.https) ? '' : `:${this.port}`;
+    const isDefault = (this.port === 80 && !this.https) || (this.port === 443 && this.https);
+    const portStr = isDefault ? '' : `:${this.port}`;
     return `${proto}://${this.host}${portStr}`;
   }
 

@@ -44,7 +44,14 @@ Page({
     this.setData({ logLoading: true });
     try {
       const lines = await this._client.getLog();
-      this.setData({ log: lines.slice(-200).reverse(), logLoading: false });
+      // 预处理 log 行，避免在 wxml 里调用 .includes()
+      const log = lines.slice(-200).reverse().map(line => ({
+        text:  line,
+        level: /err|ERR|error|ERROR/.test(line) ? 'log-err'
+             : /warn|WARN|warning/.test(line)    ? 'log-warn'
+             : 'log-normal'
+      }));
+      this.setData({ log, logLoading: false });
     } catch {
       this.setData({ logLoading: false });
     }

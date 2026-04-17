@@ -113,7 +113,7 @@
     <view wx:if="{{logLoading}}" class="loading"><text>加载日志中...</text></view>
     <scroll-view wx:else scroll-y class="log-viewer">
       <view wx:for="{{log}}" wx:key="index" class="log-line">
-        <text class="{{item.includes('err') || item.includes('ERR') ? 'log-err' : item.includes('warn') || item.includes('WARN') ? 'log-warn' : 'log-normal'}}">{{item}}</text>
+        <text class="log-line {{item.level}}">{{item.text}}</text>
       </view>
     </scroll-view>
     <view class="log-actions">

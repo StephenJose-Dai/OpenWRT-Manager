@@ -13,12 +13,30 @@
       <input class="input" placeholder="如：家里的路由器" value="{{form.label}}" data-field="label" bindinput="setField" />
     </view>
 
+    <!-- 协议选择 -->
+    <view class="field">
+      <text class="label">连接协议</text>
+      <view class="proto-row">
+        <view class="proto-btn {{proto === 'http' ? 'active' : ''}}" bindtap="switchProto" data-proto="http">HTTP</view>
+        <view class="proto-btn {{proto === 'https' ? 'active' : ''}}" bindtap="switchProto" data-proto="https">HTTPS</view>
+      </view>
+    </view>
+
+    <!-- 忽略 SSL（HTTPS 时显示）-->
+    <view wx:if="{{proto === 'https'}}" class="ssl-card">
+      <view class="ssl-left">
+        <text class="ssl-title">忽略 SSL 证书错误</text>
+        <text class="ssl-desc">自签名证书或证书过期时开启</text>
+      </view>
+      <view class="toggle {{ignoreSSL ? 'on' : ''}}" bindtap="toggleSSL"></view>
+    </view>
+
     <!-- 地址 + 端口 -->
     <view class="field {{errors.host ? 'error' : ''}}">
       <text class="label">路由器地址 <text class="required">*</text></text>
       <view class="input-row">
         <input class="input flex1" placeholder="192.168.1.1 或 域名" value="{{form.host}}" data-field="host" bindinput="setField" />
-        <input class="input port-input" type="number" placeholder="80" value="{{form.port}}" bindinput="setPort" />
+        <input class="input port-input" type="number" placeholder="{{proto === 'https' ? '443' : '80'}}" value="{{form.port}}" bindinput="setPort" />
       </view>
       <text wx:if="{{errors.host}}" class="err-msg">{{errors.host}}</text>
     </view>

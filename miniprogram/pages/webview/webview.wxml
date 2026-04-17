@@ -1,0 +1,2 @@
+<!-- 用 web-view 加载本地 HTML，H5 可以直接访问任意 IP/域名，不受小程序白名单限制 -->
+<web-view src="{{src}}" bindmessage="onMessage" />
