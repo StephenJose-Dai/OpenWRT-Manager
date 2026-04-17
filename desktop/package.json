@@ -1,5 +1,5 @@
 {
-  "name": "openwrt-manager-desktop",
+  "name": "OpenWRT-Manager-Desktop",
   "version": "1.0.0",
   "description": "OpenWrt 路由器管理桌面客户端",
   "main": "electron/main.js",
@@ -32,7 +32,7 @@
   "build": {
     "appId": "com.openwrt.manager",
     "productName": "OpenWrt Manager",
-    "copyright": "Copyright © 2024",
+    "copyright": "Copyright © 2026",
     "directories": {
       "output": "dist-electron",
       "buildResources": "assets"
@@ -145,19 +145,19 @@
       ],
       "packageCategory": "net",
       "priority": "optional",
-      "maintainer": "OpenWrt Manager <openwrt-manager@example.com>"
+      "maintainer": "OpenWrt Manager <g670677773@gmail.com>"
     },
     "rpm": {
       "depends": [
         "libnotify",
         "libXtst"
       ],
-      "maintainer": "OpenWrt Manager <openwrt-manager@example.com>"
+      "maintainer": "OpenWrt Manager <g670677773@gmail.com>"
     }
   },
   "author": {
     "name": "OpenWrt Manager",
-    "email": "openwrt-manager@example.com"
+    "email": "g670677773@gmail.com"
   },
-  "homepage": "https://github.com/YOUR_USERNAME/openwrt-manager"
+  "homepage": "https://github.com/StephenJose-Dai/openwrt-manager"
 }

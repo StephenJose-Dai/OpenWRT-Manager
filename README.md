@@ -1,420 +1,311 @@
+<div align="center">
+
+<img src="desktop/assets/icon.png" width="100" alt="OpenWrt Manager">
+
 # OpenWrt Manager
 
-<div align="center">
-  <img src="desktop/assets/icon.png" width="128" alt="OpenWrt Manager" />
-  <h3>OpenWrt 路由器统一管理工具</h3>
-  <p>无后端直连 · 局域网自动发现 · 多路由器管理 · 三端支持</p>
+**OpenWrt 路由器管理工具**
 
-  [![Build Desktop](https://github.com/YOUR_USERNAME/openwrt-manager/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/YOUR_USERNAME/openwrt-manager/actions)
-  [![Build Android](https://github.com/YOUR_USERNAME/openwrt-manager/actions/workflows/build-android.yml/badge.svg)](https://github.com/YOUR_USERNAME/openwrt-manager/actions)
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+一款用于管理OpenWRT的工具，支持Windows、Linux和Android
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![GitHub release](https://img.shields.io/github/v/release/StephenJose-Dai/OpenWRT-Manager)](https://github.com/StephenJose-Dai/OpenWRT-Manager/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/StephenJose-Dai/OpenWRT-Manager?style=social)](https://github.com/StephenJose-Dai/OpenWRT-Manager/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/StephenJose-Dai/OpenWRT-Manager?style=social)](https://github.com/StephenJose-Dai/OpenWRT-Manager/network/members)
+
+[📥 下载最新版本](#下载) · [🐛 报告问题](https://github.com/StephenJose-Dai/OpenWRT-Manager/issues) · [💬 讨论](https://github.com/StephenJose-Dai/OpenWRT-Manager/discussions)
+
 </div>
 
 ---
 
 ## 功能特性
 
-| 功能 | 说明 |
-|------|------|
-| **无后端直连** | 通过 ubus HTTP JSON-RPC 直连路由器，无需部署任何服务器或代理 |
-| **局域网自动发现** | 启动后自动探测局域网内 OpenWrt 路由器，一键连接 |
-| **公网远程管理** | 支持公网 IP / DDNS 域名，图形验证码防暴力破解 |
-| **多路由器管理** | 同时保存多台设备配置，标题栏下拉随时切换 |
-| **记住密码 / 自动登录** | 灵活的凭证保存策略，可选开机自动登录 |
-| **实时监控** | CPU 负载、内存占用、网络流量速率实时图表 |
-| **设备管理** | 查看 DHCP 在线设备列表，一键踢出 |
-| **防火墙规则** | 增删 UCI 防火墙规则，立即生效 |
-| **WiFi 密码修改** | 在线修改 WiFi 密码，无需进入 LuCI |
-| **SSH 终端** | 内置 xterm 终端，直接在 GUI 里执行路由器命令 |
-| **系统日志** | 实时查看路由器 syslog 日志 |
-| **VPN 管理** | OpenVPN 服务控制（需路由器已安装 OpenVPN）|
+- 🖥 **Windows 桌面端** — 支持 Windows 7 / 8 / 10 / 11，x64 / x86
+- 📱 **Android 移动端** — 支持手机和平板，自适应侧边栏布局
+- 🔒 **HTTP / HTTPS** — 支持自签名证书，忽略 SSL 证书验证
+- 📊 **控制台** — 系统信息、内存使用、WAN 接口状态
+- 📱 **设备管理** — DHCP 租约列表、ARP 表、踢出设备
+- 📈 **流量统计** — 实时速率图表（读取 `/proc/net/dev`）
+- 🛡 **防火墙** — 规则 / 区域 / 端口转发，新增 / 删除规则
+- ⚙️ **系统管理** — WiFi 密码修改、系统日志、软件升级检查
+- 🔍 **局域网扫描** — 自动发现路由器，支持 HTTP / HTTPS / 8080 端口
 
 ---
 
-## 支持平台
+## 截图
 
-### 桌面客户端（Windows / Linux）
+> *(截图待补充)*
 
-#### Windows
+---
 
-| 版本 | 最低系统要求 | 架构 | 备注 |
-|------|------------|------|------|
-| win10 | Windows 10 1903+ | x64 / ia32 | 使用 Electron 28，推荐 |
-| win10 | Windows 11 所有版本 | x64 / ia32 | 同上 |
-| win7 | Windows 7 SP1（需安装补丁 KB2533623）| x64 / ia32 | 使用 Electron 22，兼容旧系统 |
-| win7 | Windows 8 / 8.1 | x64 / ia32 | 同上 |
-| win7 | Windows Server 2008 R2 SP1 | x64 | 同上 |
+## 下载
 
-> **Windows 7 注意**：需安装 [KB2533623](https://support.microsoft.com/kb/2533623) 和 [KB3063858](https://support.microsoft.com/kb/3063858) 补丁，以及 Visual C++ 2015 Redistributable。
+前往 [Releases 页面](https://github.com/StephenJose-Dai/OpenWRT-Manager/releases/latest) 下载最新版本。
 
-#### Linux
+| 平台 | 文件 | 说明 |
+|------|------|------|
+| Windows 10/11 x64 | `OpenWrtManager-*-win10-x64-setup.exe` | 安装版，推荐 |
+| Windows 10/11 x64 | `OpenWrtManager-*-win10-x64-portable.exe` | 免安装版 |
+| Windows 10/11 x86 | `OpenWrtManager-*-win10-ia32-setup.exe` | 32位 |
+| Windows 7/8/8.1 x64 | `OpenWrtManager-*-win7-x64-setup.exe` | 旧系统兼容版 |
+| Android ARM64 | `OpenWrtManager-*-android-arm64-release.apk` | 主流安卓手机，推荐 |
+| Android ARMv7 | `OpenWrtManager-*-android-armv7-release.apk` | 老款安卓手机 |
+| Android x86_64 | `OpenWrtManager-*-android-x86_64-release.apk` | 平板 / 模拟器 |
+| Linux x64 | `OpenWrtManager-*-linux-x64.AppImage` | 通用 Linux |
+| Linux x64 | `OpenWrtManager-*-linux-x64.deb` | Debian / Ubuntu |
 
-| 包格式 | 适用发行版 | 最低版本 |
-|--------|-----------|---------|
-| `.deb` | **Ubuntu** | 18.04 LTS (Bionic) 及以上 |
-| `.deb` | **Debian** | 10 (Buster) 及以上 |
-| `.deb` | **Deepin（深度）** | 20 及以上 |
-| `.deb` | **统信 UOS** | 20 及以上（家庭版/专业版/服务器版）|
-| `.deb` | **优麒麟 UKylin** | 20.04 及以上 |
-| `.deb` | **openKylin（开放麒麟）** | 1.0 及以上 |
-| `.rpm` | **CentOS** | 7 及以上（需 EPEL）|
-| `.rpm` | **RHEL（红帽）** | 7 及以上 |
-| `.rpm` | **Fedora** | 30 及以上 |
-| `.rpm` | **银河麒麟 Kylin** | V10 及以上（服务器版基于 RHEL）|
-| `.rpm` | **中标麒麟 NeoKylin** | V7 及以上（基于 CentOS/RHEL）|
-| `.rpm` | **AlmaLinux / Rocky Linux** | 8 及以上 |
-| `.AppImage` | **所有 Linux** | 内核 3.2+（glibc 2.17+），无依赖，直接运行 |
-| `.pacman` | **Arch Linux** | 最新滚动版 |
-| `.pacman` | **Manjaro** | 21 及以上 |
-| `.pacman` | **EndeavourOS / Garuda Linux** | 支持 |
+> Android APK 安装前需在手机设置中开启「允许未知来源安装」。
 
-> **arm64 包**：适用于 ARM64 架构的服务器、树莓派 4/5、以及搭载 ARM 芯片的 Linux 设备。
-> 
-> **国产系统说明**：不确定用哪个包时，优先选 `.AppImage`——无需安装，`chmod +x` 后直接运行，兼容性最强。
+---
 
-### 手机 APP（Android）
+## 路由器端初始化（一次性）
 
-| APK 文件 | 架构 | 适用设备 | Android 最低版本 |
-|---------|------|---------|----------------|
-| `*-android-arm64.apk` | ARM64 | 2016 年后主流手机（华为/小米/OPPO/vivo/三星 等）| Android 5.0 (API 21) |
-| `*-android-armv7.apk` | ARMv7 | 2016 年前老款手机 | Android 5.0 (API 21) |
-| `*-android-x86_64.apk` | x86_64 | Intel/AMD 处理器平板、Chrome OS、部分模拟器 | Android 5.0 (API 21) |
-| `*-android-universal.apk` | 全架构 | 通用包（体积较大，不确定时选此）| Android 5.0 (API 21) |
+首次连接前，需在路由器上安装必要组件并配置权限：
 
-> **覆盖率**：arm64 + armv7 合计覆盖约 99% 的在役 Android 设备。
+```bash
+# 1. 安装依赖包
+opkg update && opkg install rpcd-mod-file luci-mod-rpc
 
-### 微信小程序
+# 2. 创建 ACL 权限文件
+cat > /usr/share/rpcd/acl.d/owm.json << 'ACLEOF'
+{
+  "root": {
+    "read": {
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read"]},
+      "file": {"*": ["read","exec","list"]}
+    },
+    "write": {
+      "ubus": {"*": ["*"]},
+      "uci":  {"*": ["read","write"]},
+      "file": {"*": ["read","write","exec","list"]}
+    }
+  }
+}
+ACLEOF
 
-- 微信版本：7.0.0 及以上
-- iOS：14.0 及以上
-- Android：7.0 及以上
-- 正式版仅支持 HTTPS 域名（开发版/体验版无限制）
+# 3. 重启 rpcd 生效
+/etc/init.d/rpcd restart
+```
+
+> 应用连接路由器后会**自动写入上述配置**，通常无需手动操作。
+
+---
+
+## 手动编译
+
+### 环境要求
+
+| 工具 | 版本要求 |
+|------|---------|
+| Node.js | >= 18 |
+| npm | >= 9 |
+| Java JDK | 17（仅 Android）|
+| Android SDK | API 34，NDK 26.1（仅 Android）|
+
+---
+
+### Windows / Linux 桌面端
+
+```bash
+# 1. 进入桌面端目录
+cd desktop
+
+# 2. 安装依赖
+npm install
+
+# 3. 开发模式（热更新）
+npm run dev
+
+# 4. 构建前端资源
+npm run build
+
+# 5. 打包为可执行文件
+
+# Windows 安装包 + 便携版（x64）
+npx electron-builder --win nsis portable --x64
+
+# Windows 安装包（x86）
+npx electron-builder --win nsis --ia32
+
+# Linux AppImage + deb
+npx electron-builder --linux AppImage deb --x64
+
+# 输出目录：desktop/dist-electron/
+```
+
+**Windows 7 / 8 兼容版**（使用 Electron 22）：
+
+```bash
+cd desktop
+npm install electron@22.3.27 --save-dev --no-save
+npx electron-builder --win nsis --x64
+```
+
+---
+
+### Android 端
+
+#### 前置准备
+
+1. 安装 [Android Studio](https://developer.android.com/studio) 或单独安装 Android SDK
+2. 配置环境变量：
+   ```bash
+   export ANDROID_HOME=$HOME/Android/Sdk        # Linux/macOS
+   export ANDROID_HOME=%LOCALAPPDATA%\Android\sdk  # Windows
+   ```
+3. 安装 NDK：
+   ```bash
+   sdkmanager "ndk;26.1.10909125"
+   ```
+
+#### 生成签名密钥（release 版本需要）
+
+```bash
+keytool -genkeypair \
+  -v \
+  -storetype PKCS12 \
+  -keystore my-release.keystore \
+  -alias mykey \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+#### 构建步骤
+
+```bash
+# 1. 进入移动端目录
+cd mobile
+
+# 2. 安装 JS 依赖
+npm install --legacy-peer-deps
+
+# 3. 打包 JS Bundle
+mkdir -p android/app/src/main/assets
+npx react-native bundle \
+  --platform android \
+  --dev false \
+  --entry-file index.js \
+  --bundle-output android/app/src/main/assets/index.android.bundle \
+  --assets-dest android/app/src/main/res
+
+# 4a. 构建 Debug APK（无需签名）
+cd android
+./gradlew assembleDebug
+
+# 4b. 构建 Release APK（需要签名密钥）
+./gradlew assembleRelease \
+  -PkeystoreFile=/path/to/my-release.keystore \
+  -PkeyAlias=mykey \
+  -PkeyPassword=你的密钥密码 \
+  -PstorePassword=你的keystore密码
+
+# 输出目录：
+# Debug:   android/app/build/outputs/apk/debug/
+# Release: android/app/build/outputs/apk/release/
+```
+
+#### 按架构分包
+
+默认会按 CPU 架构输出多个 APK：
+
+| 文件名 | 适用设备 |
+|--------|---------|
+| `app-arm64-v8a-release.apk` | 主流手机（ARM64）✅ 推荐 |
+| `app-armeabi-v7a-release.apk` | 老款手机（ARMv7）|
+| `app-x86_64-release.apk` | 平板 / 模拟器 |
+| `app-x86-release.apk` | x86 模拟器 |
 
 ---
 
 ## 项目结构
 
 ```
-openwrt-manager/
-├── .github/
-│   ├── workflows/
-│   │   ├── build-desktop.yml   # Windows + Linux 独立编译（可手动触发）
-│   │   ├── build-android.yml   # Android APK（可手动触发）
-│   │   ├── release.yml         # 全平台发布（推 tag 触发）
-│   │   └── ci.yml              # PR 代码检查
-│   └── SECRETS.md              # GitHub Secrets 配置说明
-│
-├── shared/
-│   └── openwrt-client.js       # 通用 ubus SDK（三端共用）
-│
-├── desktop/                    # Electron 桌面客户端
-│   ├── assets/
-│   │   ├── icon.ico            # Windows 图标（16~256px 多分辨率）
-│   │   ├── icon.png            # 主图标 256×256
-│   │   └── tray.png            # 系统托盘图标 64×64
+OpenWrt-Manager/
+├── desktop/                    # Electron 桌面端（Windows / Linux）
 │   ├── electron/
-│   │   ├── main.js             # 主进程（窗口/托盘/IPC/CSP）
-│   │   └── preload.js          # 预加载脚本
+│   │   ├── main.js             # 主进程（ubus 代理、托盘）
+│   │   └── preload.js          # 渲染进程桥接
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── ConnectionManager.jsx  # 连接管理（LAN扫描+表单+验证码）
-│   │   │   └── Layout.jsx             # 主布局（侧边栏+标题栏+路由切换）
-│   │   ├── pages/
-│   │   │   ├── DashboardPage.jsx      # 总览（CPU/内存/流量图表）
-│   │   │   ├── DevicesPage.jsx        # 设备管理（DHCP列表+踢出）
-│   │   │   ├── TrafficPage.jsx        # 流量统计（实时折线图）
-│   │   │   ├── FirewallPage.jsx       # 防火墙规则（UCI增删）
-│   │   │   ├── VPNPage.jsx            # VPN 管理（OpenVPN控制）
-│   │   │   ├── SystemPage.jsx         # 系统设置（信息/WiFi/日志）
-│   │   │   └── TerminalPage.jsx       # SSH 终端（xterm.js）
-│   │   ├── services/openwrt.js        # 引用 shared SDK，注入 fetch
-│   │   ├── store/index.js             # Zustand 全局状态
-│   │   └── styles/global.css          # 暗色主题 CSS
-│   ├── installer.nsh           # NSIS 卸载清理脚本
-│   ├── package.json            # 依赖 + electron-builder 配置
-│   ├── package-lock.json       # 锁定版本（必须提交）
-│   └── vite.config.js          # Vite 配置（含 crossorigin 修复插件）
-│
-├── mobile/                     # React Native Android
-│   ├── App.jsx                 # 根组件（导航配置）
+│   │   ├── components/         # 通用组件（布局、连接管理）
+│   │   └── pages/              # 功能页面
+│   └── package.json
+├── mobile/                     # React Native Android 端
 │   ├── src/
-│   │   ├── screens/            # Index / Add / Dashboard / Devices /
-│   │   │                       # Traffic / Firewall / System
-│   │   ├── services/openwrt.js # RN fetch 版 ubus 客户端
-│   │   ├── store/index.js      # Zustand 全局状态
-│   │   └── hooks/usePolling.js # 轮询 hook
-│   ├── android/
-│   │   ├── app/build.gradle    # ABI 分包 + 签名配置
-│   │   └── app/src/main/res/xml/network_security_config.xml
-│   ├── package.json
-│   └── package-lock.json
-│
-└── miniprogram/                # 微信小程序
-    ├── utils/openwrt.js        # wx.request 版 ubus 客户端
-    ├── pages/                  # index / add / dashboard / devices /
-    │                           # traffic / firewall / system
-    ├── app.js / app.json / app.wxss
-    └── project.config.json     # 填入 AppID 后导入微信开发者工具
+│   │   ├── screens/            # 功能页面
+│   │   ├── services/           # OpenWrt SDK
+│   │   ├── hooks/              # 自定义 Hooks
+│   │   └── components/         # 通用组件
+│   ├── android/                # Android 原生项目
+│   └── package.json
+├── shared/
+│   └── openwrt-client.js       # 桌面端共享 SDK
+└── .github/workflows/          # GitHub Actions 自动构建
 ```
-
----
-
-## 路由器端配置（首次使用必做）
-
-SSH 进路由器执行（**只需配置一次**）：
-
-```bash
-# 1. 安装依赖包
-opkg update
-opkg install rpcd uhttpd-mod-ubus luci-mod-rpc
-
-# 2. 开启 CORS（允许 App 跨域访问 ubus API）
-uci set uhttpd.main.ubus_cors=1
-uci commit uhttpd
-/etc/init.d/uhttpd restart
-
-# 3. 配置访问权限（ACL）
-cat > /usr/share/rpcd/acl.d/manager.json << 'EOF'
-{
-  "manager": {
-    "description": "OpenWrt Manager 访问权限",
-    "read":  { "ubus": {"*":["*"]}, "uci": {"*":["read"]} },
-    "write": { "ubus": {"*":["*"]}, "uci": {"*":["read","write"]} }
-  }
-}
-EOF
-/etc/init.d/rpcd restart
-
-# 4. 验证配置（替换 YOUR_PASSWORD 为路由器密码）
-curl -s -X POST http://192.168.1.1/ubus \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"call","params":
-       ["00000000000000000000000000000000","session","login",
-        {"username":"root","password":"YOUR_PASSWORD"}]}' \
-  | python3 -m json.tool
-# 返回包含 "ubus_rpc_session" 字段即表示配置成功
-```
-
----
-
-## 安装方式
-
-### Windows
-
-双击运行安装包，安装过程可选择：
-- 自定义安装路径
-- 是否创建桌面快捷方式（默认勾选）
-- 是否创建开始菜单快捷方式（默认勾选）
-
-| 文件 | 适用系统 | 架构 |
-|------|---------|------|
-| `*-win10-x64-setup.exe` | Windows 10/11 | 64位 ✅ **推荐** |
-| `*-win10-x64-portable.exe` | Windows 10/11 | 64位，免安装直接运行 |
-| `*-win10-ia32-setup.exe` | Windows 10/11 | 32位 |
-| `*-win7-x64-setup.exe` | Windows 7/8/8.1 | 64位（Electron 22 兼容版）|
-| `*-win7-ia32-setup.exe` | Windows 7/8/8.1 | 32位（Electron 22 兼容版）|
-
-### Linux
-
-#### Ubuntu / Debian / Deepin / UOS / UKylin / openKylin
-
-```bash
-# 方法1（推荐）
-sudo apt install ./OpenWrtManager-*-linux-x64.deb
-
-# 方法2（旧版 apt）
-sudo dpkg -i OpenWrtManager-*-linux-x64.deb
-sudo apt-get install -f    # 修复可能缺失的依赖
-```
-
-#### CentOS / RHEL / Fedora / 银河麒麟 / 中标麒麟
-
-```bash
-# Fedora / RHEL 8+ / AlmaLinux / Rocky Linux
-sudo dnf install OpenWrtManager-*-linux-x64.rpm
-
-# CentOS 7 / RHEL 7
-sudo yum localinstall OpenWrtManager-*-linux-x64.rpm
-
-# 银河麒麟 V10（基于 RHEL/CentOS）
-sudo yum localinstall OpenWrtManager-*-linux-x64.rpm
-```
-
-#### 所有 Linux（AppImage，无需安装，兼容性最强）
-
-```bash
-chmod +x OpenWrtManager-*-linux-x64.AppImage
-./OpenWrtManager-*-linux-x64.AppImage
-
-# 可选：集成到系统（添加到应用菜单）
-./OpenWrtManager-*-linux-x64.AppImage --install
-```
-
-#### Arch Linux / Manjaro / EndeavourOS
-
-```bash
-sudo pacman -U OpenWrtManager-*-linux-x64.pacman
-```
-
-#### 国产操作系统对应表
-
-| 国产系统 | 推荐安装包 | 最低版本 |
-|---------|-----------|---------|
-| Deepin（深度）| `.deb` | 20 |
-| 统信 UOS | `.deb` | 20（家庭版/专业版均支持）|
-| 优麒麟 UKylin | `.deb` | 20.04 |
-| openKylin（开放麒麟）| `.deb` | 1.0 |
-| 银河麒麟 Kylin | `.rpm` | V10 SP1 |
-| 中标麒麟 NeoKylin | `.rpm` | V7 |
-| 中科方德 NFSChina | `.rpm` | 4.0 |
-| 红旗 Linux | `.rpm` | 11 |
-| 麒麟软件 KylinOS | `.rpm` | V10 |
-
-> 遇到依赖问题时，统一使用 **AppImage** 版本，无需安装任何依赖，`chmod +x` 直接运行。
-
-### Android
-
-手机端开启「允许安装未知来源应用」，下载对应架构安装：
-
-```bash
-# 查看手机 CPU 架构（adb 方式）
-adb shell getprop ro.product.cpu.abi
-# arm64-v8a  → 下载 arm64 版
-# armeabi-v7a → 下载 armv7 版
-```
-
-不确定架构时直接下载 **universal（通用）** 版。
-
-### 微信小程序
-
-见 [`miniprogram/README.md`](./miniprogram/README.md)。
-
----
-
-## 本地开发
-
-### 环境要求
-
-| 工具 | 版本要求 |
-|------|---------|
-| Node.js | 18.0.0 及以上（推荐 LTS）|
-| npm | 9.0.0 及以上 |
-| Android Studio | 2022.3 及以上（手机端）|
-| JDK | 17 及以上（手机端）|
-| 微信开发者工具 | 1.06 及以上（小程序）|
-
-### 桌面端
-
-```bash
-cd desktop
-npm install
-
-# 开发模式（同时启动 Vite dev server 和 Electron）
-npm run dev
-
-# 仅编译前端
-npm run build
-
-# 打包当前平台
-npm run dist
-
-# 指定平台打包
-npx electron-builder --win --x64              # Windows x64
-npx electron-builder --win --ia32             # Windows x86
-npx electron-builder --linux deb rpm AppImage # Linux（当前架构）
-```
-
-### 手机端（Android）
-
-```bash
-cd mobile
-npm install
-
-npm start          # 启动 Metro bundler
-npm run android    # 运行到已连接的 Android 设备/模拟器
-
-# 打 Release APK（需配置签名）
-cd android && ./gradlew assembleRelease
-```
-
-### 微信小程序
-
-1. 打开[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)
-2. 「导入项目」→ 选择 `miniprogram/` 目录
-3. 填入你的 AppID（在[微信公众平台](https://mp.weixin.qq.com)注册获取）
-4. 点击「编译」预览效果
-
----
-
-## 发布（GitHub Actions）
-
-### 自动发布（推荐）
-
-```bash
-# 正式版（自动触发全平台编译，约 20 分钟出现在 Release 页面）
-git tag v1.0.0 && git push origin v1.0.0
-
-# 预发布版（自动标记为 pre-release）
-git tag v1.1.0-beta.1 && git push origin v1.1.0-beta.1
-git tag v2.0.0-rc.1   && git push origin v2.0.0-rc.1
-```
-
-### 手动编译
-
-在 Actions 页面选择对应 workflow → 点击「Run workflow」：
-- `Build Desktop` → 只编译 Windows + Linux
-- `Build Android APK` → 只编译 Android
-- `Release (All Platforms)` → 全平台
-
-### 签名配置
-
-在仓库 **Settings → Secrets → Actions** 添加：
-
-| Secret 名称 | 说明 | 是否必须 |
-|------------|------|---------|
-| `ANDROID_KEYSTORE_BASE64` | Android 签名证书 Base64 | 可选（不配置用 debug 签名）|
-| `ANDROID_KEY_ALIAS` | Key 别名 | 配置签名时必须 |
-| `ANDROID_KEY_PASSWORD` | Key 密码 | 配置签名时必须 |
-| `ANDROID_STORE_PASSWORD` | Keystore 密码 | 配置签名时必须 |
-
-详见 [`.github/SECRETS.md`](.github/SECRETS.md)。
 
 ---
 
 ## 常见问题
 
-**Q: 安装打开后黑屏？**  
-旧版本的 Vite + Electron 兼容问题（`crossorigin` 属性 + `file://` 协议冲突导致脚本无法加载）。请下载最新版本，v1.0.0 起已彻底修复。
+**Q: 提示「权限不足」或无法获取数据？**
 
-**Q: 局域网扫描扫不到路由器？**  
-确认已完成[路由器端配置](#路由器端配置首次使用必做)步骤，特别是 `ubus_cors=1` 和重启 `uhttpd`、`rpcd`。
+手动执行路由器初始化命令，或在应用设置中点击「重新配置 ACL」。
 
-**Q: 连接提示"权限不足"或 ubus 错误 6？**  
-执行 ACL 配置步骤并重启 rpcd：`/etc/init.d/rpcd restart`
+**Q: HTTPS 连接提示证书错误？**
 
-**Q: 公网如何使用？**  
-在「添加路由器」填写公网 IP 或 DDNS 域名即可。建议：①修改 uhttpd 为非默认端口；②更安全的方案是配置 WireGuard VPN，客户端先连 VPN 再以局域网 IP 使用。
+在添加路由器时开启「忽略 SSL 证书错误」选项。路由器使用自签名证书时需要此选项。
 
-**Q: 微信小程序正式版连不上路由器？**  
-正式版只允许 HTTPS 备案域名。开发阶段在开发者工具「详情 → 本地设置」勾选「不校验合法域名」即可。生产环境需为路由器配置域名 + Let's Encrypt 证书。
+**Q: Windows 提示「未知发布者」或 SmartScreen 警告？**
 
-**Q: AppImage 提示缺少 FUSE？**  
-```bash
-sudo apt install libfuse2       # Ubuntu 22.04+
-sudo apt install fuse           # Ubuntu 20.04 及更早
-# 或者用 --appimage-extract-and-run 参数直接运行（无需 FUSE）
-./OpenWrtManager-*.AppImage --appimage-extract-and-run
-```
+点击「更多信息」→「仍要运行」。未购买代码签名证书时会出现此提示，程序本身安全无害。
 
-**Q: 国产系统（银河麒麟等）安装 rpm 失败？**  
-先试 `rpm --nodeps -i *.rpm`，或直接用 AppImage 版跳过依赖问题。
+**Q: Android 安装提示「解析包时出现问题」？**
 
-**Q: Windows 7 提示缺少 DLL？**  
-安装 [Visual C++ 2015-2022 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) 后重试。
+请下载与您设备 CPU 架构对应的 APK，主流手机选 `arm64` 版本。
 
 ---
 
-## License
+## 开发技术栈
 
-MIT © OpenWrt Manager Contributors  
-本项目与 OpenWrt 官方项目无关联，为独立开发的第三方管理工具。
+| 端 | 技术 |
+|----|------|
+| 桌面端 | Electron 28 + React 18 + Vite 5 |
+| 移动端 | React Native 0.73 + Android |
+| 通信协议 | ubus HTTP JSON-RPC |
+
+---
+
+## 许可证
+
+本项目基于 [GNU General Public License v3.0](LICENSE) 开源。
+
+```
+Copyright (C) 2024  YOUR_NAME
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+```
+
+---
+
+## 作者
+
+**YOUR_NAME**
+
+- GitHub: [@StephenJose-Dai](https://github.com/StephenJose-Dai)
+- Email: your@email.com
+- 项目地址: [https://github.com/StephenJose-Dai/OpenWRT-Manager](https://github.com/StephenJose-Dai/OpenWRT-Manager)
+
+---
+
+<div align="center">
+
+如果这个项目对你有帮助，欢迎点个 ⭐ Star！
+
+[![Star History Chart](https://api.star-history.com/svg?repos=StephenJose-Dai/OpenWRT-Manager&type=Date)](https://star-history.com/#StephenJose-Dai/OpenWRT-Manager&Date)
+
+</div>

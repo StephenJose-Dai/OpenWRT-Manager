@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 env:
-  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.run_number) }}
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('-{0}', github.run_number) }}
   BUILD_TYPE:  ${{ inputs.build_type || 'release' }}
 
 jobs:

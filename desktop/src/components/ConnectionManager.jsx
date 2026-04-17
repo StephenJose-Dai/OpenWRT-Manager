@@ -50,11 +50,13 @@ function AboutModal({ version, onClose }) {
           </div>
           <div className="about-name">OpenWrt Manager</div>
           <div className="about-version">版本 {version || '1.0.0'}</div>
-          <div className="about-desc">无后端直连 OpenWrt 路由器管理工具<br/>通过 ubus HTTP JSON-RPC 直连路由器，无需服务器</div>
+          <div className="about-desc">OpenWrt 路由器管理工具<br/>通过 OpenWRT管路工具可远程管控OpenWRT路由器</div>
           <div className="about-links">
-            <button className="about-link-btn" onClick={()=>open('https://github.com/YOUR_USERNAME/openwrt-manager')}>🔗 GitHub 项目地址</button>
-            <button className="about-link-btn" onClick={()=>open('https://github.com/YOUR_USERNAME/openwrt-manager/issues')}>🐛 反馈问题 / 功能建议</button>
-            <button className="about-link-btn" onClick={()=>open('https://github.com/YOUR_USERNAME/openwrt-manager/releases')}>📦 查看所有版本</button>
+            <button className="about-link-btn" onClick={()=>open('https://github.com/StephenJose-Dai/openwrt-manager')}>🔗 GitHub 项目地址</button>
+            <button className="about-link-btn" onClick={()=>open('https://github.com/StephenJose-Dai/openwrt-manager/issues')}>🐛 反馈问题 / 功能建议</button>
+            <button className="about-link-btn" onClick={()=>open('https://github.com/StephenJose-Dai/openwrt-manager/releases')}>📦 查看所有版本</button>
+            <button className="about-link-btn" onClick={()=>open('https://daishenghui.club')}>📚 博客</button>
+            <button className="about-link-btn" onClick={()=>open('')}>🏘️ 微信公众号：戴戴的Linux</button>            
           </div>
           <div className="about-footer">MIT License · OpenWrt Manager Contributors</div>
         </div>
