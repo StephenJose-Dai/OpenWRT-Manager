@@ -53,8 +53,8 @@ base64 -i release.keystore | tr -d '\n'
 
 ```bash
 # 打 tag 即可触发全平台编译和发布
-git tag v1.0.0
-git push origin v1.0.0
+git tag v26.4.171630
+git push origin v26.4.171630
 
 # 发布预览版（beta/alpha/rc 关键词触发 prerelease）
 git tag v1.1.0-beta.1
@@ -68,16 +68,16 @@ git push origin v1.1.0-beta.1
 打完 tag 后，Actions 会并行编译所有平台，约 15-25 分钟后在 GitHub Release 页面看到：
 
 ```
-OpenWrtManager-v1.0.0-win10-x64-setup.exe      # Windows 10/11 64位安装包（推荐）
-OpenWrtManager-v1.0.0-win10-x64-portable.exe   # Windows 10/11 64位便携版
-OpenWrtManager-v1.0.0-win10-ia32-setup.exe     # Windows 10/11 32位
-OpenWrtManager-v1.0.0-win7-x64-setup.exe       # Windows 7/8/8.1 64位
-OpenWrtManager-v1.0.0-win7-ia32-setup.exe      # Windows 7/8/8.1 32位
-OpenWrtManager-v1.0.0-android-arm64.apk        # Android 主流手机（推荐）
-OpenWrtManager-v1.0.0-android-armv7.apk        # Android 老款手机
-OpenWrtManager-v1.0.0-android-x86_64.apk       # Android 模拟器/平板
-OpenWrtManager-v1.0.0-android-x86.apk          # 老款模拟器
-OpenWrtManager-v1.0.0-android-universal.apk    # Android 通用包
+OpenWrtManager-v26.4.171630-win10-x64-setup.exe      # Windows 10/11 64位安装包（推荐）
+OpenWrtManager-v26.4.171630-win10-x64-portable.exe   # Windows 10/11 64位便携版
+OpenWrtManager-v26.4.171630-win10-ia32-setup.exe     # Windows 10/11 32位
+OpenWrtManager-v26.4.171630-win7-x64-setup.exe       # Windows 7/8/8.1 64位
+OpenWrtManager-v26.4.171630-win7-ia32-setup.exe      # Windows 7/8/8.1 32位
+OpenWrtManager-v26.4.171630-android-arm64.apk        # Android 主流手机（推荐）
+OpenWrtManager-v26.4.171630-android-armv7.apk        # Android 老款手机
+OpenWrtManager-v26.4.171630-android-x86_64.apk       # Android 模拟器/平板
+OpenWrtManager-v26.4.171630-android-x86.apk          # 老款模拟器
+OpenWrtManager-v26.4.171630-android-universal.apk    # Android 通用包
 ```
 
 共 10 个产物，全部自动上传到 Release。
