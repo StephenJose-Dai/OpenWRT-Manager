@@ -1,4 +1,0 @@
-{
-  "desc": "配置页面是否被微信索引",
-  "rules": [{ "action": "disallow", "page": "*" }]
-}
