@@ -304,11 +304,14 @@ the Free Software Foundation, either version 3 of the License, or
 
 ## 作者
 
-**YOUR_NAME**
+**StephenJose_Dai**
 
 - GitHub: [@StephenJose-Dai](https://github.com/StephenJose-Dai)
-- Email: your@email.com
 - 项目地址: [https://github.com/StephenJose-Dai/OpenWRT-Manager](https://github.com/StephenJose-Dai/OpenWRT-Manager)
+- Blog: https://daishenghui.club
+
+## 进群交流
+![wcqrc](imgs/8c031817-fb03-445f-9ee4-e8c70d6445dd.png)
 
 ---
 
