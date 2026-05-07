@@ -13,7 +13,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/StephenJose-Dai/OpenWRT-Manager?style=social)](https://github.com/StephenJose-Dai/OpenWRT-Manager/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/StephenJose-Dai/OpenWRT-Manager?style=social)](https://github.com/StephenJose-Dai/OpenWRT-Manager/network/members)
 
-[📥 下载最新版本](#下载) · [🐛 报告问题](https://github.com/StephenJose-Dai/OpenWRT-Manager/issues) · [💬 讨论](https://github.com/StephenJose-Dai/OpenWRT-Manager/discussions)
+[📥 下载最新版本](#下载) · [🐛 报告问题](https://github.com/StephenJose-Dai/OpenWRT-Manager/issues) · [💬 讨论](#进群交流)
 
 </div>
 
@@ -290,6 +290,7 @@ OpenWrt-Manager/
 ## 许可证
 
 本项目基于 [GNU General Public License v3.0](LICENSE) 开源。
+基于本项目进行二开、传播等行为的，需保留原作者的所有信息以及出处，否则作者将保留追究侵权的法律责任的权利。
 
 ```
 Copyright (C) 2024  YOUR_NAME
