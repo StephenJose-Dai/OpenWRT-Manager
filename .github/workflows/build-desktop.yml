@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('-{0}', github.run_number) }}
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.run_number) }}
 
 jobs:
   # ── Windows 10/11（最新 Electron）──────────────────────────

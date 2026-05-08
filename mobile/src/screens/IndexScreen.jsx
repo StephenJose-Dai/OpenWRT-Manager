@@ -55,12 +55,8 @@ export default function IndexScreen({ navigation }) {
     if (router.rememberPassword && router.password) {
       connect(router)
     } else {
-      Alert.prompt(
-        `连接 ${router.label || router.host}`,
-        '请输入密码',
-        [{ text: '取消', style: 'cancel' }, { text: '连接', onPress: (pwd) => connect({ ...router, password: pwd }) }],
-        'secure-text'
-      )
+      setPwdInput('')
+      setPwdModal(router)
     }
   }
 
@@ -180,6 +176,39 @@ export default function IndexScreen({ navigation }) {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* 密码输入弹窗（替代 iOS 专用的 Alert.prompt）*/}
+      <Modal visible={!!pwdModal} transparent animationType="fade" onRequestClose={() => setPwdModal(null)}>
+        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setPwdModal(null)}>
+          <TouchableOpacity activeOpacity={1} style={s.modal} onPress={() => {}}>
+            <Text style={s.modalTitle}>输入密码</Text>
+            <View style={[s.modalHostBar, {marginBottom:12}]}>
+              <Text style={[s.modalHost, {color:C.muted}]}>{pwdModal?.label || pwdModal?.host}</Text>
+            </View>
+            <TextInput
+              style={[s.input, {marginBottom:14}]}
+              placeholder="路由器密码"
+              placeholderTextColor={C.muted}
+              value={pwdInput}
+              onChangeText={setPwdInput}
+              secureTextEntry
+              autoFocus
+            />
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setPwdModal(null)}>
+                <Text style={{color:C.muted,fontSize:14}}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.connectBtn} onPress={() => {
+                const r = pwdModal
+                setPwdModal(null)
+                connect({ ...r, password: pwdInput })
+              }}>
+                <Text style={{color:'#fff',fontSize:14,fontWeight:'600'}}>连接</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* 快速连接弹窗 */}
       <Modal visible={!!quickConn} transparent animationType="fade" onRequestClose={() => setQuickConn(null)}>
