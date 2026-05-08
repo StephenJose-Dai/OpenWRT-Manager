@@ -15,6 +15,8 @@ export default function IndexScreen({ navigation }) {
   const [loading,    setLoading]    = useState(null)
   const [quickConn,  setQuickConn]  = useState(null)
   const { isTablet, width } = useTablet() // { host, port, https, isOpenWrt }
+  const [pwdModal,   setPwdModal]   = useState(null)
+  const [pwdInput,   setPwdInput]   = useState('')
   const [qcPwd,      setQcPwd]      = useState('')
   const [qcProto,    setQcProto]    = useState('http')
   const [qcPort,     setQcPort]     = useState('80')
@@ -113,7 +115,7 @@ export default function IndexScreen({ navigation }) {
             <Text style={s.sectionTitle}>已保存的路由器</Text>
             <View style={isTablet ? {flexDirection:'row',flexWrap:'wrap',gap:10} : null}>
             {routers.map(r => (
-              <TouchableOpacity key={r.id} style={isTablet ? {width:'48%'} : null} style={[s.card, loading===r.id && s.cardActive]}
+              <TouchableOpacity key={r.id} style={[s.card, loading===r.id && s.cardActive, isTablet ? {width:'48%'} : null]}
                 onPress={() => handleRouterPress(r)} onLongPress={() => handleDelete(r.id)}>
                 <View style={s.cardIcon}><Text style={s.cardIconText}>⊞</Text></View>
                 <View style={s.cardBody}>
