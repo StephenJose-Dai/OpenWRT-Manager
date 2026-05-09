@@ -34,7 +34,7 @@
 ---
 
 ## 截图
-
+<img src="imgs/e69b6166a31a5a9be8676dc8548c65c6.jpg" width="50%">
 ![1](imgs/07517be5356b0c6da937d63f33b8f3b1.png)
 ![2](imgs/1cb706d165db7d059a8177599444bdc6.png)
 ![3](imgs/fa0f0e5a4e8457542439833a3b08d467.png)
