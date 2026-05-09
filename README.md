@@ -35,17 +35,17 @@
 
 ## 截图
 <div align="center">
-    <img src="imgs/07517be5356b0c6da937d63f33b8f3b1.png" width="50%">
-    <img src="imgs/1cb706d165db7d059a8177599444bdc6.png" width="50%">
-    <img src="imgs/fa0f0e5a4e8457542439833a3b08d467.png" width="50%">
-    <img src="imgs/59b512487a723813435f0909e409ba5c.png" width="50%">
-    <img src="imgs/840ff60e03b95eee96da033ba6b1699c.png" width="50%">
-    <img src="imgs/9b3d6b03e436e02172ac89868e7fcf0c.png" width="50%">
-    <img src="imgs/397da79a15f376b78d81426cfe3d85e7.png" width="50%">
-    <img src="imgs/b8221d0063ac1e1f9b9b86297c5afc38.png" width="50%">
-    <img src="imgs/f52420945419454e31916327c433d0e8.png" width="50%">
-    <img src="imgs/d560a88ad88ca2e29b69987f89298586.png" width="50%">
-    <img src="imgs/78de9d454575830837884c1825615956.png" width="50%">
+    <img src="imgs/07517be5356b0c6da937d63f33b8f3b1.png" width="70%">
+    <img src="imgs/1cb706d165db7d059a8177599444bdc6.png" width="70%">
+    <img src="imgs/fa0f0e5a4e8457542439833a3b08d467.png" width="70%">
+    <img src="imgs/59b512487a723813435f0909e409ba5c.png" width="70%">
+    <img src="imgs/840ff60e03b95eee96da033ba6b1699c.png" width="70%">
+    <img src="imgs/9b3d6b03e436e02172ac89868e7fcf0c.png" width="70%">
+    <img src="imgs/397da79a15f376b78d81426cfe3d85e7.png" width="70%">
+    <img src="imgs/b8221d0063ac1e1f9b9b86297c5afc38.png" width="70%">
+    <img src="imgs/f52420945419454e31916327c433d0e8.png" width="70%">
+    <img src="imgs/d560a88ad88ca2e29b69987f89298586.png" width="70%">
+    <img src="imgs/78de9d454575830837884c1825615956.png" width="70%">
     <img src="imgs/81556ac34e2c4d034378f12a19123893.jpg" width="30%">
     <img src="imgs/926461b99b699f8e55b97f56e64e2693.jpg" width="30%">
     <img src="imgs/f87572a2d5782d2e91707f00384d4150.jpg" width="30%">
